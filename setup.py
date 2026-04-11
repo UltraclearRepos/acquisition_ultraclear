@@ -8,9 +8,9 @@ except:
         install_requires = fp.read()
 
 setup(
-    name='vnav-acquisition',
-    version='1.5.1',
-    description='Vibronav acquisition tools',
+    name='uclr-acquisition',
+    version='0.1.0',
+    description='Ultraclear acquisition tools',
     author='Dominik Rzepka',
     author_email='dominik.rzepka@gmail.com',
     classifiers=[
@@ -22,15 +22,10 @@ setup(
     install_requires=install_requires,
     extras_require={},
     package_data={
-        'vnav_acquisition': ['*.js', '*.css', '*.html', '*.txt']
+        'uclr_acquisition': ['*.js', '*.css', '*.html', '*.txt']
     },
     data_files=[],
     entry_points={
-        'console_scripts': ['vnav_acquisition=vnav_acquisition.webserver:main',
-                            'vnav_wav_process=vnav_acquisition.clean:main',
-                            'vnav_audio_video_sync=vnav_acquisition.sync:main',
-                            'vnav_annotate_positions=vnav_acquisition.track_position:main',
-                            'vnav_video_video_sync=vnav_acquisition.sync_video:main',
-                            'vnav_audio_video_sync_new=vnav_acquisition.sync_new:main'],
+        'console_scripts': ['uclr_acquisition=uclr_acquisition.webserver:main'],
     }
 )
