@@ -1,5 +1,5 @@
 import time
-from vnav_acquisition.dobot_api import DobotApiDashboard, DobotApiMove
+from uclr_acquisition.dobot_api import DobotApiDashboard, DobotApiMove
 
 # ---------------------------------------------
 # Robot IP and Port settings

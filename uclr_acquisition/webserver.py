@@ -1,11 +1,8 @@
 import eventlet
 eventlet.monkey_patch()
 
-import numpy as np
-import cv2
-import base64
 from flask import Flask, request, jsonify, send_from_directory
-from uclr_acquisition.comm import is_ssh_connected, ssh_connect, on_rec_start, on_rec_stop, start_live_data_stream, stop_live_data_stream
+from uclr_acquisition.comm import is_ssh_connected, ssh_connect, on_rec_start, on_rec_stop
 from uclr_acquisition.config import config
 from uclr_acquisition.runtime_config import runtime_config
 from uclr_acquisition.automation import safe_run_automation
@@ -18,12 +15,10 @@ import os
 from pathlib import Path
 from flask_socketio import SocketIO
 import sounddevice as sd
-import time
 
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR
-IP_FILE = BASE_DIR / "pc_ip.txt"
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 app.config["JSON_AS_ASCII"] = False
@@ -57,10 +52,7 @@ def frontpage():
 def api_config():
     print("Received config/GET request")
     return jsonify({
-        "materials": config["materials"],
-        "speeds": config["speeds"],
-        "needleTypes": config["needleTypes"],
-        "sensorVersions": config["sensorVersions"]
+        "speeds": config["speeds"]
     })
 
 @app.route("/run", methods=["POST"])
@@ -205,32 +197,6 @@ def post_delete_last_recording():
         return jsonify({"status": "not found", "message": "No recordings to delete."})
     return jsonify({"status": "ok", "message": message})
 
-@app.route('/detect-cube', methods=['POST'])
-def detect_cube():
-
-    buffer = request.files["frame"].read()
-    buffer_arr = np.frombuffer(buffer, dtype=np.uint8)
-    frame = cv2.imdecode(buffer_arr, cv2.IMREAD_COLOR)
-    if frame is None:
-        return jsonify({"error": "Invalid image data"}), 400
-
-    res = detect_cube_pose(frame)
-    if res is None:
-        return jsonify({"detected": False})
-    
-    rvec, tvec, R_inv, corners, ids, init_frame = res
-
-    ok, jpg = cv2.imencode(".jpg", init_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
-    if not ok:
-        return jsonify({"error": "Could not encode image"}), 500
-
-    data_url = "data:image/jpeg;base64," + base64.b64encode(jpg.tobytes()).decode('utf-8')
-
-    return jsonify({
-        "detected": True,
-        "image": data_url
-    })
-
 @app.route('/set-micro-filter', methods=['POST'])
 def set_filter_settings():
     print("Received set-micro-filter/POST request")
@@ -247,25 +213,6 @@ def set_filter_settings():
     
     return jsonify({"status": "ok"})
 
-@app.route('/start-stream', methods=['POST'])
-def start_stream():
-    print("Received start-stream/POST request")
-    try:
-        start_live_data_stream(config['connection'], socketio)
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        print(f"Error starting live data stream: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/stop-stream', methods=['POST'])
-def stop_stream():
-    try:
-        stop_live_data_stream(config['connection'], socketio)
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        print(f"Error stopping live data stream: {e}")
-        return jsonify({"error": str(e)}), 500
-    
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Web browser interface for synchronous acquisition of audio "
@@ -283,9 +230,6 @@ def main():
 
     port = args.port
     url = "http://127.0.0.1:{0}".format(port)
-    IP_FILE.write_text(get_local_ip_address())
-
-    ssh_connect(*config['connection'], socketio_instance=socketio)
 
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     

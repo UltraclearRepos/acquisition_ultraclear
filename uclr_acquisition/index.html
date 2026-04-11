@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>VibroNav Acquisition Tool</title>
+    <title>UltraClear Acquisition Tool</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -12,12 +12,8 @@
     <div class="container">
 
         <div class="head">
-            <div id="raspberryStatus">Raspberry status: unknown</div>
-            <button id="toggleDataStream">Start Live Data</button>
-
             <div id="automationStatus">Automation status: idle</div>
             <button id="deleteRecording">Delete Last Recording</button>
-            <button id="detectCube">Detect Cube</button>
             <div id="iterationCounter">Iteration: -</div>
         </div>
 
@@ -44,35 +40,8 @@
                         </div>
 
                         <div class="form-group">
-                            <label for="material">Material</label>
-                            <select id="material"></select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="needleType">Needle type</label>
-                            <select id="needleType"></select>
-                        </div>
-
-                        <div class="form-group">
-                            <label for="sensorVersion">Sensor version</label>
-                            <select id="sensorVersion"></select>
-                        </div>
-
-                        <div class="form-group">
                             <label for="description">Description</label>
                             <input type="text" id="description" />
-                        </div>
-
-                        <div class="form-group">
-                            <label for="modeToggle">Mode</label>
-                            <div class="toggle-switch">
-                                <input type="checkbox" id="modeToggle" />
-                                <label class="switch-label" for="modeToggle">
-                                    <span class="label automation-label">Automation</span>
-                                    <span class="label manual-label">Manual Recording</span>
-                                    <span class="slider"></span>
-                                </label>
-                            </div>
                         </div>
 
                         <div id="automationForm">
@@ -153,20 +122,6 @@
                             </div>
                         </div>
 
-                        <div id="manualForm">
-                            <div class="form-group">
-                                <label for="username">Username</label>
-                                <input type="text" id="username" />
-                            </div>
-                            <div class="form-group">
-                                <label for="recordingDuration">Recording duration (seconds)</label>
-                                <input type="number" id="recordingDuration" min="1" />
-                            </div>
-                            <div id="controls">
-                                <button id="startRecording">Start recording</button>
-                                <button id="stopRecording" disabled>Stop recording</button>
-                            </div>
-                        </div>
                         <div id="recordingTimer">Timer: 0s</div>
                     </div>
                 </div>
@@ -183,62 +138,8 @@
                     </div>
                 </div>
 
-                <div class="canvas-container-horizontal">
-                    <div class="canvas-column">
-                        <div class="filter-bar">
-                            <label class="inline">
-                                <span>Audio bandpass</span>
-                                <label class="simple-toggle">
-                                    <input type="checkbox" id="filterToggle" />
-                                    <span class="slider"></span>
-                                </label>
-                            </label>
-
-                            <div class="filter-fields hidden">
-                                <label class="inline">
-                                    Low [Hz]
-                                    <input type="number" id="bpLow" min="0" max="23499" step="1" value="0" />
-                                </label>
-                                <label class="inline">
-                                    High [Hz]
-                                    <input type="number" id="bpHigh" min="1" max="23500" step="1" value="23500" />
-                                </label>
-                                <button id="applyFilter">Apply</button>
-                            </div>
-                        </div>
-                        <div class="canvas-wrapper">
-                            <canvas id="micSignalLeft" width="640" height="150"></canvas>
-                        </div>
-                        <div class="canvas-wrapper">
-                            <canvas id="micSignalRight" width="640" height="150"></canvas>
-                        </div>
-                    </div>
-                    <div class="canvas-column">
-                        <div class="spec-controls">
-                            <label class="inline">
-                                Center freq [Hz]
-                                <input type="number" id="specCenterFreq" min="0" max="24000" step=1 value="12000" />
-                            </label>
-                            <label class="inline">
-                                Zoom
-                                <input type="number" id="specZoom" min="1" max="1000" step='0.1' value="1" />
-                            </label>
-                            <button id="applySpecScale">Apply</button>
-                        </div>
-                        <div class="canvas-wrapper">
-                            <canvas id="spectrogram" width="640" height="300"></canvas>
-                        </div>
-                    </div>
-                </div>
             </main>
 
-        </div>
-    </div>
-
-    <div id="cubeModal" class="modal">
-        <div class="modal-content">
-            <span id="cubeModalClose" class="close">&times;</span>
-            <img id="cubeModalImage" alt="Cube Detection result" />
         </div>
     </div>
 
