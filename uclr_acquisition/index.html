@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>VibroNav Acquisition Tool</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <div class="container">
+
+        <div class="head">
+            <div id="raspberryStatus">Raspberry status: unknown</div>
+            <button id="toggleDataStream">Start Live Data</button>
+
+            <div id="automationStatus">Automation status: idle</div>
+            <button id="deleteRecording">Delete Last Recording</button>
+            <button id="detectCube">Detect Cube</button>
+            <div id="iterationCounter">Iteration: -</div>
+        </div>
+
+        <div class="content-wrapper">
+
+            <aside class="sidebar">
+                <div class="form-section">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="audioSource">Camera audio input source</label>
+                            <select id="audioSource"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="microOutput">Microphone output device</label>
+                            <select id="microOutput"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="videoSource">Video source</label>
+                            <select id="videoSource"></select>
+                        </div>
+                        <div class="form-group">
+                            <label for="videoSource2">Video source second</label>
+                            <select id="videoSource2"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="material">Material</label>
+                            <select id="material"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="needleType">Needle type</label>
+                            <select id="needleType"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sensorVersion">Sensor version</label>
+                            <select id="sensorVersion"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="description">Description</label>
+                            <input type="text" id="description" />
+                        </div>
+
+                        <div class="form-group">
+                            <label for="modeToggle">Mode</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="modeToggle" />
+                                <label class="switch-label" for="modeToggle">
+                                    <span class="label automation-label">Automation</span>
+                                    <span class="label manual-label">Manual Recording</span>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="automationForm">
+                            <div class="form-group horizontal-group">
+                                <label for="iterations">Number of iterations</label>
+                                <input type="number" id="iterations" value="10" min="1" />
+                            </div>
+                            <div class="form-group">
+                                <label for="speed">
+                                    Speed: <span id="speedValue">50</span>
+                                </label>
+                                <input type="range" id="speed" name="speed" min="1" max="100" step="1" value="50" />
+                            </div>
+                            <div class="form-group param-pair">
+                                <div class="param-group-wrapper">
+                                    <label for="initX">Initial X</label>
+                                    <div class="param-group">
+                                        <input type="number" id="initX" value="300" />
+                                    </div>
+                                </div>
+                                <div class="param-group-wrapper">
+                                    <label for="finishX">Finish X</label>
+                                    <div class="param-group">
+                                        <input type="number" id="finishX" value="400" />
+                                    </div>
+                                </div>
+                                <div class="param-group-wrapper">
+                                    <label for="y">Y</label>
+                                    <div class="param-group">
+                                        <input type="number" id="y" value="0" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group param-pair">
+                                <div class="param-group-wrapper">
+                                    <label for="UpZ">Up Z</label>
+                                    <div class="param-group">
+                                        <input type="number" id="upZ" value="80" />
+                                    </div>
+                                </div>
+                                <div class="param-group-wrapper">
+                                    <label for="downZ">Down Z</label>
+                                    <div class="param-group">
+                                        <input type="number" id="downZ" value="0" />
+                                    </div>
+                                </div>
+                                <div class="param-group-wrapper">
+                                    <label for="r">R</label>
+                                    <div class="param-group">
+                                        <input type="number" id="r" value="-50" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Motion style</label>
+                                <div class="radio-group">
+                                    <label><input type="radio" name="motionType" value="Only Up and Down" checked />Only
+                                        up and down</label>
+                                    <label><input type="radio" name="motionType" value="Up, Down, Forward" />Up, Down,
+                                        Forward</label>
+                                </div>
+                            </div>
+                            <div class="form-group horizontal-group">
+                                <label for="intervalToggle">Interval</label>
+                                <label class="simple-toggle">
+                                    <input type="checkbox" id="intervalToggle" />
+                                    <span class="slider"></span>
+                                </label>
+                                <input type="number" id="interval" style="display: none;">
+                            </div>
+                            <div class="form-group horizontal-group">
+                                <label for="sleepTime">Sleep time</label>
+                                <input type="number" id="sleepTime" value="3" min="0" />
+                            </div>
+                            <div id="controls">
+                                <button id="startTests">Start automation</button>
+                                <button id="stopTests" disabled>Stop automation</button>
+                            </div>
+                        </div>
+
+                        <div id="manualForm">
+                            <div class="form-group">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" />
+                            </div>
+                            <div class="form-group">
+                                <label for="recordingDuration">Recording duration (seconds)</label>
+                                <input type="number" id="recordingDuration" min="1" />
+                            </div>
+                            <div id="controls">
+                                <button id="startRecording">Start recording</button>
+                                <button id="stopRecording" disabled>Stop recording</button>
+                            </div>
+                        </div>
+                        <div id="recordingTimer">Timer: 0s</div>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="media-section">
+
+                <div class="video-row">
+                    <div class="video">
+                        <video id="video" controls autoplay playsinline muted></video>
+                    </div>
+                    <div class="video">
+                        <video id="video2" controls autoplay playsinline muted></video>
+                    </div>
+                </div>
+
+                <div class="canvas-container-horizontal">
+                    <div class="canvas-column">
+                        <div class="filter-bar">
+                            <label class="inline">
+                                <span>Audio bandpass</span>
+                                <label class="simple-toggle">
+                                    <input type="checkbox" id="filterToggle" />
+                                    <span class="slider"></span>
+                                </label>
+                            </label>
+
+                            <div class="filter-fields hidden">
+                                <label class="inline">
+                                    Low [Hz]
+                                    <input type="number" id="bpLow" min="0" max="23499" step="1" value="0" />
+                                </label>
+                                <label class="inline">
+                                    High [Hz]
+                                    <input type="number" id="bpHigh" min="1" max="23500" step="1" value="23500" />
+                                </label>
+                                <button id="applyFilter">Apply</button>
+                            </div>
+                        </div>
+                        <div class="canvas-wrapper">
+                            <canvas id="micSignalLeft" width="640" height="150"></canvas>
+                        </div>
+                        <div class="canvas-wrapper">
+                            <canvas id="micSignalRight" width="640" height="150"></canvas>
+                        </div>
+                    </div>
+                    <div class="canvas-column">
+                        <div class="spec-controls">
+                            <label class="inline">
+                                Center freq [Hz]
+                                <input type="number" id="specCenterFreq" min="0" max="24000" step=1 value="12000" />
+                            </label>
+                            <label class="inline">
+                                Zoom
+                                <input type="number" id="specZoom" min="1" max="1000" step='0.1' value="1" />
+                            </label>
+                            <button id="applySpecScale">Apply</button>
+                        </div>
+                        <div class="canvas-wrapper">
+                            <canvas id="spectrogram" width="640" height="300"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </main>
+
+        </div>
+    </div>
+
+    <div id="cubeModal" class="modal">
+        <div class="modal-content">
+            <span id="cubeModalClose" class="close">&times;</span>
+            <img id="cubeModalImage" alt="Cube Detection result" />
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/gh/corbanbrook/dsp.js/dsp.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/smoothie/1.34.0/smoothie.min.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js" crossorigin="anonymous"></script>
+    <script src="main.js"></script>
+</body>
+
+</html>
