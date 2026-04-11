@@ -5,17 +5,16 @@ import numpy as np
 import cv2
 import base64
 from flask import Flask, request, jsonify, send_from_directory
-from vnav_acquisition.comm import is_ssh_connected, ssh_connect, on_rec_start, on_rec_stop, start_live_data_stream, stop_live_data_stream
-from vnav_acquisition.config import config
-from vnav_acquisition.runtime_config import runtime_config
-from vnav_acquisition.automation import safe_run_automation
+from uclr_acquisition.comm import is_ssh_connected, ssh_connect, on_rec_start, on_rec_stop, start_live_data_stream, stop_live_data_stream
+from uclr_acquisition.config import config
+from uclr_acquisition.runtime_config import runtime_config
+from uclr_acquisition.automation import safe_run_automation
 from .record import start_recording, stop_recording, delete_last_recording
 from .utils import build_filename, get_local_ip_address
-from .track_position import detect_cube_pose
 import threading
 import webbrowser
 import argparse
-import os   # Berke 16.09.2024
+import os
 from pathlib import Path
 from flask_socketio import SocketIO
 import sounddevice as sd
