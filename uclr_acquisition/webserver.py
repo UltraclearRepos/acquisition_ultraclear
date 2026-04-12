@@ -62,7 +62,7 @@ def run():
     params = request.get_json(force=True)
     print(f'With params: {params}')
 
-    required = ("material", "speed", "needleType", "iterations", "initX", "finishX", "upZ", "downZ", "motionType")
+    required = ("speed", "iterations", "points")
     if not all(param in params for param in required):
         return jsonify({"error": "Missing parameters"}), 400
     
@@ -70,22 +70,12 @@ def run():
     automation_thread = threading.Thread(
         target=safe_run_automation,
         kwargs=dict(
-            material = params["material"],
-            needle_type = params["needleType"],
-            microphone_type = params["microphoneType"],
-            description = params["description"],
-            stop_event = stop_event,
-            initX = params["initX"],
-            finishX = params["finishX"],
-            upZ = params["upZ"],
-            downZ = params["downZ"],
-            y = params["y"],
-            r = params["r"],
+            points = params["points"],
             speed = int(params["speed"]),
-            motion_type = params["motionType"],
-            num_iterations = params["iterations"],
-            interval = params["interval"],
-            sleep_time = params["sleepTime"],
+            description = params.get("description", ""),
+            num_iterations = int(params["iterations"]),
+            sleep_time = int(params.get("sleepTime", 3)),
+            stop_event = stop_event,
             socketio_instance=socketio
         ),
         daemon=True

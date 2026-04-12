@@ -30,29 +30,18 @@ def safe_run_automation(socketio_instance, **kwargs):
 
 
 def run_automation(
-        material, 
-        needle_type, 
-        microphone_type, 
-        description, 
-        stop_event, 
-        initX, 
-        finishX, 
-        upZ, 
-        downZ, 
-        y,
-        r,
+        points, 
         speed, 
-        motion_type, 
+        description, 
         num_iterations, 
-        interval, 
         sleep_time, 
+        stop_event, 
         socketio_instance):
     """
     Main automation functions:
       - Connects to the Dobot Mg400,
       - Iterates through the given number of loops,
-      - Moves the robot and records audio+video, 
-      - Adjusts positions after certain iteration counts.
+      - Moves the robot through sequence of points and records audio+video.
     """
     global dashboard
     print("Executing 'run_automation'")
@@ -65,15 +54,11 @@ def run_automation(
     enable_robot(dashboard)
     time.sleep(2)
 
-    if motion_type == "Up, Down, Forward":
-        gap = (finishX - initX) / num_iterations
-        print(f"Gap between X positions: {gap}")
-    else:
-        gap = 0
-        print("No gap calculation needed for motion type: Only Up and Down")
+    if not points:
+        print("No points provided. Exiting.")
+        return
 
-    P1 = (initX, y, upZ, r)
-    P2 = (initX, y, downZ, r)
+    first_point = (points[0]['x'], points[0]['y'], points[0]['z'], points[0]['r'])
 
     for i in range(num_iterations):
 
@@ -85,11 +70,12 @@ def run_automation(
             "iteration": i+1
         })
 
-        move_to_position(dashboard, move, P1, speed_l=speed)
-        print(f'Moving to initial position P1: {P1}')
+        # Move to the first point before recording
+        move_to_position(dashboard, move, first_point, speed_l=speed)
+        print(f'Moving to initial position: {first_point}')
         time.sleep(0.3)
 
-        output_filename_prefix = build_filename(description, material, f'Speed-{speed}', needle_type, microphone_type)
+        output_filename_prefix = build_filename(description, f'Speed-{speed}')
         
         is_started = start_recording(output_filename_prefix, socketio_instance)
 
@@ -99,35 +85,22 @@ def run_automation(
         time.sleep(0.5)
         print(f"Recording {i+1}/{num_iterations} started.")
 
-        curr_Z = P1[2]
-
-        curr_Z -= interval
-        while(curr_Z >= downZ):
-            P2 = (P2[0], P2[1], curr_Z, P2[3])
-            move_to_position(dashboard, move, P2, speed_l=speed)
-            print(f'Moving to position P2: {P2}')
-            time.sleep(sleep_time)
-            curr_Z -= interval
-
-        curr_Z += (2 * interval)
-        while(curr_Z <= upZ and interval != upZ - downZ):
-            P2 = (P2[0], P2[1], curr_Z, P2[3])
-            move_to_position(dashboard, move, P2, speed_l=speed)
-            print(f'Moving to position P2: {P2}')
-            curr_Z += interval
-            if curr_Z <= upZ:
-                time.sleep(sleep_time)
-        
-        # Move back to P1
-        move_to_position(dashboard, move, P1, speed_l=speed)
-        print(f'Moving back to initial position P1: {P1}')
-        time.sleep(0.5)
+        # Follow the rest of the points (if there's more than 1 point)
+        for idx in range(1, len(points)):
+            if stop_event.is_set():
+                break
             
-        P1 = (P1[0] + gap, P1[1], upZ, P1[3])
-        P2 = (P2[0] + gap, P2[1], downZ, P2[3])
+            p = points[idx]
+            target_point = (p['x'], p['y'], p['z'], p['r'])
+            move_to_position(dashboard, move, target_point, speed_l=speed)
+            print(f'Moving to point {idx + 1}: {target_point}')
+            time.sleep(sleep_time)
 
-        print(f'Changed P1 to: {P1}')
-        print(f'Changed P2 to: {P2}')
+        # Go back to the first point to close the loop
+        if len(points) > 1 and not stop_event.is_set():
+            move_to_position(dashboard, move, first_point, speed_l=speed)
+            print(f'Moving back to initial position: {first_point}')
+            time.sleep(0.5)
 
         stop_recording(socketio_instance)
 

@@ -39,12 +39,10 @@ let recordingStartTime = null;
 let recordingTimerInterval = null;
 let sharedAudioTrack = null;
 
-
-
 const automationForm = document.getElementById("automationForm");
-const intervalToggle = document.getElementById("intervalToggle");
-const intervalEL = document.getElementById("interval");
 const sleepTimeEl = document.getElementById("sleepTime");
+const pointsContainer = document.getElementById("pointsContainer");
+const addPointBtn = document.getElementById("addPointBtn");
 
 const DEFAULT_CONFIG = {
 	speeds: ["slow", "medium", "fast"]
@@ -352,42 +350,30 @@ function startAutomation() {
 	const description = descriptionEl.value;
 	const iterInput = iterEl.value;
 	const iterations = iterInput ? parseInt(iterInput, 10) || 1 : 1;
-	const initX = parseInt(document.getElementById("initX").value);
-	const finishX = parseInt(document.getElementById("finishX").value);
-	const upZ = parseInt(document.getElementById("upZ").value);
-	const downZ = parseInt(document.getElementById("downZ").value);
-	const y = parseInt(document.getElementById("y").value);
-	const r = parseInt(document.getElementById("r").value);
-	const motionType = document.querySelector('input[name="motionType"]:checked').value;
 	const sleepTime = parseInt(sleepTimeEl.value);
-
-	let interval = upZ - downZ;
-	if (intervalToggle.checked) {
-		interval = parseInt(intervalEL.value);
-	}
 
 	if (iterations <= 0) {
 		return alert("Iterations must be greater then 0");
 	}
-	if (motionType === "Up, Down, Forward" && finishX <= initX) {
-		return alert("Finish X must be greater than Init X in 'Up, Down, Forward' motion type");
-	}
-	if (motionType === "Up, Down, Forward" && (finishX - initX) / iterations < 2) {
-		alert("Your gap between punctures is very small: " + (finishX - initX) / iterations + " mm. But experiment is performing.");
+
+	const points = Array.from(document.querySelectorAll('.point-row')).map(row => {
+		return {
+			x: parseFloat(row.querySelector('.point-x').value) || 0,
+			y: parseFloat(row.querySelector('.point-y').value) || 0,
+			z: parseFloat(row.querySelector('.point-z').value) || 0,
+			r: parseFloat(row.querySelector('.point-r').value) || 0
+		};
+	});
+
+	if (points.length === 0) {
+		return alert("Please add at least one point.");
 	}
 
 	const payload = {
 		speed: speed,
 		description: description,
 		iterations: iterations,
-		initX: initX,
-		finishX: finishX,
-		upZ: upZ,
-		downZ: downZ,
-		y: y,
-		r: r,
-		motionType: motionType,
-		interval: interval,
+		points: points,
 		sleepTime: sleepTime
 	};
 
@@ -430,7 +416,19 @@ function stopAutomation() {
 
 }
 
-
+function addPointRow() {
+	const row = document.createElement("div");
+	row.className = "point-row param-pair";
+	row.innerHTML = `
+		<div class="param-group-wrapper"><input type="number" class="point-x" placeholder="X" /></div>
+		<div class="param-group-wrapper"><input type="number" class="point-y" placeholder="Y" /></div>
+		<div class="param-group-wrapper"><input type="number" class="point-z" placeholder="Z" /></div>
+		<div class="param-group-wrapper"><input type="number" class="point-r" placeholder="R" /></div>
+		<button type="button" class="remove-point-btn small-btn">X</button>
+	`;
+	if (pointsContainer) pointsContainer.appendChild(row);
+	row.querySelector('.remove-point-btn').addEventListener('click', () => row.remove());
+}
 
 function deleteLastRecording() {
 	deleteRecordingBt.disabled = true;
@@ -475,11 +473,7 @@ deleteRecordingBt.addEventListener("click", deleteLastRecording);
 speedSlider.addEventListener("input", (e) => {
 	speedValueEl.textContent = e.target.value;
 })
-intervalToggle.addEventListener("change", (e) => {
-	intervalEL.style.display = e.target.checked ? "block" : "none";
-})
-
-
+addPointBtn.addEventListener("click", addPointRow);
 
 
 //browser ID

@@ -345,3 +345,27 @@ input[type="range"] {
         flex-direction: column;
     }
 }
+
+.points-section > label:first-child {
+    display: block;
+    margin-bottom: 8px;
+}
+
+#pointsContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#addPointBtn {
+    margin-top: 8px;
+}
+
+.point-row {
+    align-items: center;
+}
+
+.remove-point-btn {
+    background-color: #f44336;
+    color: white;
+}
