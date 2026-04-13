@@ -1,11 +1,12 @@
 import eventlet
 eventlet.monkey_patch()
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
+import cv2
 from uclr_acquisition.comm import is_ssh_connected, ssh_connect, on_rec_start, on_rec_stop
 from uclr_acquisition.config import config
 from uclr_acquisition.runtime_config import runtime_config
-from uclr_acquisition.automation import safe_run_automation
+from uclr_acquisition.experiment import safe_run_automation
 from .record import start_recording, stop_recording, delete_last_recording
 from .utils import build_filename, get_local_ip_address
 import threading
@@ -15,6 +16,10 @@ import os
 from pathlib import Path
 from flask_socketio import SocketIO
 import sounddevice as sd
+from uclr_acquisition import sensors
+from uclr_acquisition.config import config
+from uclr_acquisition.sensors.usg import USGScanner
+
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -47,6 +52,44 @@ def upload_video():
 @app.route("/", methods=['GET'])
 def frontpage():
     return send_from_directory(STATIC_DIR, "index.html")
+
+@app.route('/usg_feed')
+def usg_feed():
+    def generate():
+        while True:
+            if sensors.usg_scanner is None or not sensors.usg_scanner.is_initialized:
+                eventlet.sleep(1)
+                continue
+            
+            with sensors.usg_scanner.lock:
+                frame = sensors.usg_scanner.latest_frame
+                
+            if frame is not None:
+                ret, buffer = cv2.imencode('.jpg', frame)
+                if ret:
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            
+            eventlet.sleep(0.03)
+            
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/usg-toggle', methods=['POST'])
+def usg_toggle():
+    if sensors.usg_scanner is None:
+        return jsonify({"status": "error", "message": "USG not initialized"})
+    
+    data = request.json
+    action = data.get("action")
+    
+    if action == "turn_on":
+        sensors.usg_scanner.turn_on()
+    elif action == "turn_off":
+        success, msg = sensors.usg_scanner.turn_off()
+        if not success:
+            return jsonify({"status": "error", "message": msg})
+            
+    return jsonify({"status": "ok"})
 
 @app.route("/config", methods=['GET'])
 def api_config():
@@ -217,6 +260,12 @@ def main():
 
     if args.setup:
         config.load_from_json(args.setup)
+
+    try:
+        sensors.usg_scanner = USGScanner(config["usg_dll_path"])
+        sensors.usg_scanner.start()
+    except Exception as e:
+        print(f"Nie powiodło się uruchomienie USG: {e}")
 
     port = args.port
     url = "http://127.0.0.1:{0}".format(port)

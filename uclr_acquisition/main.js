@@ -43,6 +43,7 @@ const automationForm = document.getElementById("automationForm");
 const sleepTimeEl = document.getElementById("sleepTime");
 const pointsContainer = document.getElementById("pointsContainer");
 const addPointBtn = document.getElementById("addPointBtn");
+const toggleUsgBtn = document.getElementById("toggleUsgBtn");
 
 const DEFAULT_CONFIG = {
 	speeds: ["slow", "medium", "fast"]
@@ -340,8 +341,19 @@ function log(message) {
 }
 
 function toggleButtons(automation_running) {
-	startAutomationBt.disabled = automation_running;
-	stopAutomationBt.disabled = !automation_running;
+	if (automation_running === "running") {
+		startAutomationBt.disabled = true;
+		stopAutomationBt.disabled = false;
+		if (toggleUsgBtn) toggleUsgBtn.disabled = true;
+		automationForm.classList.add("disabled");
+		document.querySelectorAll("#automationForm input, #automationForm select, #automationForm button").forEach(el => el.disabled = true);
+	} else {
+		startAutomationBt.disabled = false;
+		stopAutomationBt.disabled = true;
+		if (toggleUsgBtn) toggleUsgBtn.disabled = false;
+		automationForm.classList.remove("disabled");
+		document.querySelectorAll("#automationForm input, #automationForm select, #automationForm button").forEach(el => el.disabled = false);
+	}
 }
 
 function startAutomation() {
@@ -475,6 +487,28 @@ speedSlider.addEventListener("input", (e) => {
 })
 addPointBtn.addEventListener("click", addPointRow);
 
+let isUsgOn = true;
+if (toggleUsgBtn) {
+	toggleUsgBtn.addEventListener("click", () => {
+		isUsgOn = !isUsgOn;
+		const action = isUsgOn ? "turn_on" : "turn_off";
+		toggleUsgBtn.disabled = true;
+		fetch("/usg-toggle", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ action: action })
+		}).then(res => res.json()).then(data => {
+			if (data.status === "ok") {
+				toggleUsgBtn.textContent = isUsgOn ? "Zatrzymaj USG" : "Uruchom USG";
+			} else {
+				isUsgOn = !isUsgOn;
+				alert(data.message);
+			}
+		}).finally(() => {
+			toggleUsgBtn.disabled = false;
+		});
+	});
+}
 
 //browser ID
 function getBrowser() {

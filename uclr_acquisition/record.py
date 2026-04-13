@@ -1,9 +1,14 @@
 from .comm import on_rec_start, on_rec_stop
 from .config import config
+from uclr_acquisition import sensors
 import time
 import os
 
+filename_prefix = None
+
 def start_recording(output_filename_prefix, socketio_instance):
+    global filename_prefix
+    filename_prefix = output_filename_prefix
 
     video_filename = f"{output_filename_prefix}.mp4"
     audio_filename = f"{output_filename_prefix}.wav"
@@ -21,10 +26,18 @@ def start_recording(output_filename_prefix, socketio_instance):
             "shouldUpload": False
         })
         return False
+    if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
+        sensors.usg_scanner.start_recording()
     
     return True
 
 def stop_recording(socketio_instance):
+    global filename_prefix
+    
+    if sensors.usg_scanner and sensors.usg_scanner.is_initialized and filename_prefix:
+        os.makedirs("usg", exist_ok=True)
+        usg_video_path = os.path.join("usg", f"{filename_prefix}_USG.mp4")
+        sensors.usg_scanner.stop_recording(usg_video_path)
     is_recorded = on_rec_stop()
     # is_recorded = True
     if not is_recorded:
