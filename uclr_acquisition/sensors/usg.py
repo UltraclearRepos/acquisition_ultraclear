@@ -18,7 +18,8 @@ class USGScanner(threading.Thread):
         self.is_recording = False
         self.recorded_frames = [] 
         
-        self.latest_frame = None
+        self.black_frame = np.zeros((self.h, self.w), dtype=np.uint8)
+        self.latest_frame = self.black_frame.copy()
         self.lock = threading.Lock()
         self.record_start_time = 0
         self.record_stop_time = 0
@@ -74,6 +75,9 @@ class USGScanner(threading.Thread):
                 if self.target_frozen:
                     if self.has_started_scanning and self.is_initialized:
                         self.lib.Freeze_ultrasound_scanning()
+                    with self.lock:
+                        self.latest_frame = self.black_frame.copy()
+                    last_frame = None
                     self.is_frozen = True
                 else:
                     if self.is_initialized:
