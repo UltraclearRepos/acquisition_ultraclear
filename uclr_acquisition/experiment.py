@@ -1,8 +1,7 @@
 import time
 from uclr_acquisition.config import config
-from uclr_acquisition.comm import on_rec_start, on_rec_stop, kill_rasp_process
 from uclr_acquisition.dobot import connect_robot, enable_robot, disable_robot, move_to_position
-from .record import start_recording, stop_recording
+from .record import start_recording, stop_recording, kill_recording
 from .utils import build_filename
 
 dashboard = None
@@ -16,14 +15,10 @@ def safe_run_automation(socketio_instance, **kwargs):
         run_automation(**kwargs, socketio_instance=socketio_instance)
     except Exception as e:
         print(f'AUTOMATION STOPPED WITH ERROR: {e}')
-        kill_rasp_process()
         socketio_instance.emit("automation-status", {
             "status": "idle",
         })
-        socketio_instance.emit("record", {
-            "action": "stop",
-            "shouldUpload": False
-        })
+        kill_recording(socketio_instance)
         if dashboard:
             disable_robot(dashboard)
         dashboard = None

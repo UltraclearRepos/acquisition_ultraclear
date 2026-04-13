@@ -26,6 +26,7 @@ class USGScanner(threading.Thread):
         self.is_frozen = False
         self._freeze_request = False
         self._resume_request = False
+        self.was_frozen = True
 
         try:
             self.lib = ctypes.CDLL(self.dll_path)
@@ -131,6 +132,7 @@ class USGScanner(threading.Thread):
         return True, "Pomyślnie zamrożono skanowanie."
 
     def start_recording(self):
+        self.was_frozen = self.is_frozen
         if self.is_frozen or self._freeze_request:
             self.turn_on()
             
@@ -159,3 +161,10 @@ class USGScanner(threading.Thread):
             print(f"USG Video saved successfully to {video_path}")
         else:
             print("USG Video not saved - no frames captured.")
+
+        if self.was_frozen:
+            self.turn_off()
+
+    def kill_recording(self):
+        self.is_recording = False
+        self.recorded_frames.clear()

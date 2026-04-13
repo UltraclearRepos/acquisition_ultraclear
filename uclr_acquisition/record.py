@@ -1,4 +1,3 @@
-from .comm import on_rec_start, on_rec_stop
 from .config import config
 from uclr_acquisition import sensors
 import time
@@ -11,21 +10,19 @@ def start_recording(output_filename_prefix, socketio_instance):
     filename_prefix = output_filename_prefix
 
     video_filename = f"{output_filename_prefix}.mp4"
-    audio_filename = f"{output_filename_prefix}.wav"
 
     socketio_instance.emit("record", {
         "action": "start",
         "filename": video_filename
     })
 
-    is_started = on_rec_start(config['connection'], socketio_instance, audio_filename)
     # is_started = True
-    if not is_started:
-        socketio_instance.emit("record", {
-            "action": "stop",
-            "shouldUpload": False
-        })
-        return False
+    # if not is_started:
+    #     socketio_instance.emit("record", {
+    #         "action": "stop",
+    #         "shouldUpload": False
+    #     })
+    #     return False
     if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
         sensors.usg_scanner.start_recording()
     
@@ -38,29 +35,34 @@ def stop_recording(socketio_instance):
         os.makedirs("usg", exist_ok=True)
         usg_video_path = os.path.join("usg", f"{filename_prefix}_USG.mp4")
         sensors.usg_scanner.stop_recording(usg_video_path)
-    is_recorded = on_rec_stop()
-    # is_recorded = True
-    if not is_recorded:
-        socketio_instance.emit("record", {
-            "action": "stop",
-            "shouldUpload": False
-        })
-    else:
-        time.sleep(0.5)
-        socketio_instance.emit("record", {
-            "action": "stop",
-            "shouldUpload": True
-        })
+
+    time.sleep(0.3)
+    socketio_instance.emit("record", {
+        "action": "stop",
+        "shouldUpload": True
+    })
+    filename_prefix = None
+
+def kill_recording(socketio_instance):
+    global filename_prefix
+    socketio_instance.emit("record", {
+        "action": "stop",
+        "shouldUpload": False
+    })
+    if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
+        sensors.usg_scanner.kill_recording()
+    filename_prefix = None
+
 
 def delete_last_recording():
     videos_deleted = delete_videos(folder='videos')
-    audios_deleted = delete_audios(folder=config['local_dir'])
+    usg_deleted = delete_usg(folder="usg")
 
     parts = []
     if videos_deleted:
         parts.append("Video")
-    if audios_deleted:
-        parts.append("Audio")
+    if usg_deleted:
+        parts.append("USG")
     
     return " + ".join(parts) if parts else ""
 
@@ -86,7 +88,7 @@ def delete_videos(folder):
     return True
 
 
-def delete_audios(folder):
+def delete_usg(folder):
     files = {}
     for file in os.listdir(folder):
         parts = file.split("_")

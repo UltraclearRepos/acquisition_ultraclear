@@ -14,7 +14,7 @@
         <div class="head">
             <div id="automationStatus">Automation status: idle</div>
             <div class="form-group usg-toggle-group">
-                <button id="toggleUsgBtn" class="small-btn">Zatrzymaj USG</button>
+                <button id="toggleUsgBtn" class="small-btn">Start USG preview</button>
             </div>
             <button id="deleteRecording">Delete Last Recording</button>
             <div id="iterationCounter">Iteration: -</div>
@@ -90,7 +90,8 @@
                         <video id="video2" controls autoplay playsinline muted></video>
                     </div>
                     <div class="video">
-                        <img id="usgStream" src="/usg_feed" alt="Live USG Preview" onerror="this.style.display='none'" />
+                        <img id="usgStream" src="/usg_feed" alt="Live USG Preview"
+                            onerror="this.style.display='none'" />
                     </div>
                 </div>
 

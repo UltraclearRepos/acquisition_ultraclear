@@ -45,6 +45,8 @@ const pointsContainer = document.getElementById("pointsContainer");
 const addPointBtn = document.getElementById("addPointBtn");
 const toggleUsgBtn = document.getElementById("toggleUsgBtn");
 
+let isUsgOn = false;
+
 const DEFAULT_CONFIG = {
 	speeds: ["slow", "medium", "fast"]
 };
@@ -341,7 +343,7 @@ function log(message) {
 }
 
 function toggleButtons(automation_running) {
-	if (automation_running === "running") {
+	if (automation_running === true) {
 		startAutomationBt.disabled = true;
 		stopAutomationBt.disabled = false;
 		if (toggleUsgBtn) toggleUsgBtn.disabled = true;
@@ -487,7 +489,6 @@ speedSlider.addEventListener("input", (e) => {
 })
 addPointBtn.addEventListener("click", addPointRow);
 
-let isUsgOn = true;
 if (toggleUsgBtn) {
 	toggleUsgBtn.addEventListener("click", () => {
 		isUsgOn = !isUsgOn;
@@ -499,7 +500,7 @@ if (toggleUsgBtn) {
 			body: JSON.stringify({ action: action })
 		}).then(res => res.json()).then(data => {
 			if (data.status === "ok") {
-				toggleUsgBtn.textContent = isUsgOn ? "Zatrzymaj USG" : "Uruchom USG";
+				toggleUsgBtn.textContent = isUsgOn ? "Stop USG preview" : "Start USG preview";
 			} else {
 				isUsgOn = !isUsgOn;
 				alert(data.message);
