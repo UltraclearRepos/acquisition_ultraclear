@@ -23,9 +23,9 @@ class USGScanner(threading.Thread):
         self.record_start_time = 0
         self.record_stop_time = 0
         
-        self.is_frozen = False
-        self._freeze_request = False
-        self._resume_request = False
+        self.is_frozen = True
+        self.target_frozen = True
+        self.has_started_scanning = False
         self.was_frozen = True
 
         try:
@@ -66,22 +66,20 @@ class USGScanner(threading.Thread):
         if self.lib.data_view_function() < 0: return
         if self.lib.mixer_control_function(0, 0, self.w, self.h, 0, 0, 0) < 0: return
 
-        self.lib.Run_ultrasound_scanning()
-        print("Ultrasound Stream Started...")
+        print("Ultrasound initialized in frozen state.")
         last_frame = None 
 
         while self.running:
-            if self._freeze_request:
-                if self.is_initialized:
-                    self.lib.Freeze_ultrasound_scanning()
-                self.is_frozen = True
-                self._freeze_request = False
-                
-            if self._resume_request:
-                if self.is_initialized:
-                    self.lib.Run_ultrasound_scanning()
-                self.is_frozen = False
-                self._resume_request = False
+            if self.target_frozen != self.is_frozen:
+                if self.target_frozen:
+                    if self.has_started_scanning and self.is_initialized:
+                        self.lib.Freeze_ultrasound_scanning()
+                    self.is_frozen = True
+                else:
+                    if self.is_initialized:
+                        self.lib.Run_ultrasound_scanning()
+                    self.has_started_scanning = True
+                    self.is_frozen = False
                 
             if self.is_frozen:
                 time.sleep(0.05)
@@ -120,7 +118,7 @@ class USGScanner(threading.Thread):
             
     def turn_on(self):
         """Wznawia fizyczne skanowanie USG"""
-        self._resume_request = True
+        self.target_frozen = False
 
     def turn_off(self):
         """Zamraża fizyczne skanowanie USG (oszczędza sprzęt)"""
@@ -128,12 +126,12 @@ class USGScanner(threading.Thread):
             msg = "Zatrzymywanie zablokowane - trwa zgrywanie danych."
             print(f"Pominięto: {msg}")
             return False, msg
-        self._freeze_request = True
+        self.target_frozen = True
         return True, "Pomyślnie zamrożono skanowanie."
 
     def start_recording(self):
-        self.was_frozen = self.is_frozen
-        if self.is_frozen or self._freeze_request:
+        self.was_frozen = self.target_frozen
+        if self.target_frozen:
             self.turn_on()
             
         self.recorded_frames.clear()
@@ -168,3 +166,5 @@ class USGScanner(threading.Thread):
     def kill_recording(self):
         self.is_recording = False
         self.recorded_frames.clear()
+        if self.was_frozen:
+            self.turn_off()
