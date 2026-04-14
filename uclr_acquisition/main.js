@@ -347,14 +347,10 @@ function toggleButtons(automation_running) {
 		startAutomationBt.disabled = true;
 		stopAutomationBt.disabled = false;
 		if (toggleUsgBtn) toggleUsgBtn.disabled = true;
-		automationForm.classList.add("disabled");
-		document.querySelectorAll("#automationForm input, #automationForm select, #automationForm button").forEach(el => el.disabled = true);
 	} else {
 		startAutomationBt.disabled = false;
 		stopAutomationBt.disabled = true;
 		if (toggleUsgBtn) toggleUsgBtn.disabled = false;
-		automationForm.classList.remove("disabled");
-		document.querySelectorAll("#automationForm input, #automationForm select, #automationForm button").forEach(el => el.disabled = false);
 	}
 }
 

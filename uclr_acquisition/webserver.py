@@ -60,7 +60,7 @@ def usg_feed():
             
             with sensors.usg_scanner.lock:
                 frame = sensors.usg_scanner.latest_frame
-                
+
             if frame is not None:
                 ret, buffer = cv2.imencode('.jpg', frame)
                 if ret:
@@ -73,11 +73,15 @@ def usg_feed():
 
 @app.route('/usg-toggle', methods=['POST'])
 def usg_toggle():
+
+    print("Received usg-toggle/POST request")
+
     if sensors.usg_scanner is None:
         return jsonify({"status": "error", "message": "USG not initialized"})
     
     data = request.json
     action = data.get("action")
+    print(f'With action: {action}')
     
     if action == "turn_on":
         sensors.usg_scanner.turn_on()

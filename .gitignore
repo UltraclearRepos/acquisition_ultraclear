@@ -1,4 +1,5 @@
 .uclrAcq
+.vscode
 setup.json
 uclr_acquisition/__pycache__
 uclr_acquisition/sensors/__pycache__

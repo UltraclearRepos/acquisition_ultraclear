@@ -26,7 +26,6 @@ class USGScanner(threading.Thread):
         
         self.is_frozen = True
         self.target_frozen = True
-        self.has_started_scanning = False
         self.was_frozen = True
 
         try:
@@ -66,14 +65,20 @@ class USGScanner(threading.Thread):
         if self.lib.find_connected_probe() != 101: return
         if self.lib.data_view_function() < 0: return
         if self.lib.mixer_control_function(0, 0, self.w, self.h, 0, 0, 0) < 0: return
+        # Initializing the buffer sequence by running and freezing once physically
+        self.lib.Run_ultrasound_scanning()
+        time.sleep(0.2)
+        self.lib.Freeze_ultrasound_scanning()
 
         print("Ultrasound initialized in frozen state.")
         last_frame = None 
 
         while self.running:
             if self.target_frozen != self.is_frozen:
+                print(f"Changing frozen state from {self.is_frozen} to {self.target_frozen}")
                 if self.target_frozen:
-                    if self.has_started_scanning and self.is_initialized:
+                    if self.is_initialized:
+                        print("USG: Freezing ultrasound scanning")
                         self.lib.Freeze_ultrasound_scanning()
                     with self.lock:
                         self.latest_frame = self.black_frame.copy()
@@ -81,22 +86,26 @@ class USGScanner(threading.Thread):
                     self.is_frozen = True
                 else:
                     if self.is_initialized:
+                        print("USG: Running ultrasound scanning")
                         self.lib.Run_ultrasound_scanning()
-                    self.has_started_scanning = True
                     self.is_frozen = False
                 
             if self.is_frozen:
-                time.sleep(0.05)
+                time.sleep(0.1)
                 continue
 
             self.lib.return_pixel_values(self.p_array)
             np_all = np.ctypeslib.as_array(self.p_array)
             blue = np_all[0::4].astype(np.uint8)      
             img_gsc = blue.reshape((self.w, self.h), order='F')
-            img = img_gsc[:, ::-1].T                   
+            img = img_gsc[:, ::-1].T
+
+            print("Taking new frame")           
             
             if last_frame is None or not np.array_equal(img, last_frame):
+                print("New frame")
                 frame_copy = img.copy()
+                print(frame_copy)
 
                 if self.is_recording:
                     current_time = time.time()
@@ -107,7 +116,7 @@ class USGScanner(threading.Thread):
                     
                 last_frame = frame_copy
             
-            time.sleep(0.005) # ~200 fps check
+            time.sleep(0.03)
 
     def stop(self):
         self.running = False
@@ -122,10 +131,12 @@ class USGScanner(threading.Thread):
             
     def turn_on(self):
         """Wznawia fizyczne skanowanie USG"""
+        print("USG: turn_on")
         self.target_frozen = False
 
     def turn_off(self):
         """Zamraża fizyczne skanowanie USG (oszczędza sprzęt)"""
+        print("USG: turn_off")
         if self.is_recording:
             msg = "Zatrzymywanie zablokowane - trwa zgrywanie danych."
             print(f"Pominięto: {msg}")
