@@ -71,7 +71,6 @@ class USGScanner(threading.Thread):
         self.lib.Freeze_ultrasound_scanning()
 
         print("Ultrasound initialized in frozen state.")
-        last_frame = None 
 
         while self.running:
             if self.target_frozen != self.is_frozen:
@@ -80,7 +79,6 @@ class USGScanner(threading.Thread):
                         self.lib.Freeze_ultrasound_scanning()
                     with self.lock:
                         self.latest_frame = self.black_frame.copy()
-                    last_frame = None
                     self.is_frozen = True
                 else:
                     if self.is_initialized:
@@ -97,19 +95,15 @@ class USGScanner(threading.Thread):
             img_gsc = blue.reshape((self.w, self.h), order='F')
             img = img_gsc[:, ::-1].T
 
-            
-            if last_frame is None or not np.array_equal(img, last_frame):
-                frame_copy = img.copy()
+            frame_copy = img.copy()
 
-                if self.is_recording:
-                    current_time = time.time()
-                    self.recorded_frames.append((current_time, frame_copy))
+            if self.is_recording:
+                current_time = time.time()
+                self.recorded_frames.append((current_time, frame_copy))
 
-                with self.lock:
-                    self.latest_frame = frame_copy
+            with self.lock:
+                self.latest_frame = frame_copy
                     
-                last_frame = frame_copy
-            
             time.sleep(0.03)
 
     def stop(self):
