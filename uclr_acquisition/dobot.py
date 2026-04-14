@@ -1,4 +1,6 @@
 import time
+import os
+import threading
 from uclr_acquisition.dobot_api import DobotApiDashboard, DobotApiMove
 
 # ---------------------------------------------
@@ -91,7 +93,7 @@ def move_to_position(dashboard, move, position, speed_l, acc_l=20, tolerance=1.0
 
     # Poll GetPose until the robot reaches the target
     while True:
-        time.sleep(0.1)
+        time.sleep(0.05)
         response = dashboard.GetPose()
         pose_vals = parse_pose(response)
         if pose_vals:
@@ -106,3 +108,56 @@ def move_to_position(dashboard, move, position, speed_l, acc_l=20, tolerance=1.0
     duration = end_time - start_time
     print(f"Action completed, time: {duration:.2f} seconds")
     return duration
+
+
+class DobotLogger(threading.Thread):
+    def __init__(self, dashboard, filepath, sample_period=0.05):
+        super().__init__()
+        self.dashboard = dashboard
+        self.filepath = filepath
+        self.sample_period = sample_period
+        self.running = True
+        self.samples = []
+        self.daemon = True
+
+    def _read_pose_sample(self):
+        response = self.dashboard.GetPose()
+        pose_vals = parse_pose(response)
+        if not pose_vals:
+            return None
+
+        x, y, z, r = pose_vals[:4]
+        timestamp = time.time()
+        return (timestamp, x, y, z, r)
+
+    def run(self):
+        while self.running:
+            loop_start = time.perf_counter()
+            try:
+                sample = self._read_pose_sample()
+                if sample:
+                    self.samples.append(sample)
+            except Exception as e:
+                print(f"DobotLogger error: {e}")
+
+            elapsed = time.perf_counter() - loop_start
+            time.sleep(max(0, self.sample_period - elapsed))
+
+    def save(self):
+        directory = os.path.dirname(self.filepath)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+        with open(self.filepath, 'w') as f:
+            f.write("timestamp,x,y,z,r\n")
+            for timestamp, x, y, z, r in self.samples:
+                f.write(f"{timestamp:.4f},{x:.4f},{y:.4f},{z:.4f},{r:.4f}\n")
+
+    def stop(self):
+        self.running = False
+        if self.is_alive():
+            self.join()
+
+    def stop_and_save(self):
+        self.stop()
+        self.save()

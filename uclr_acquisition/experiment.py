@@ -1,16 +1,18 @@
+import os
 import time
 from uclr_acquisition.config import config
-from uclr_acquisition.dobot import connect_robot, enable_robot, disable_robot, move_to_position
+from uclr_acquisition.dobot import connect_robot, enable_robot, disable_robot, move_to_position, DobotLogger
 from .record import start_recording, stop_recording, kill_recording
 from .utils import build_filename
 
 dashboard = None
+dobot_logger = None
     
 def safe_run_automation(socketio_instance, **kwargs):
     """
     Wrapper function to run the automation, handle any exception and proceed actions that is needed when automation stopped working
     """
-    global dashboard
+    global dashboard, dobot_logger
     try:
         run_automation(**kwargs, socketio_instance=socketio_instance)
     except Exception as e:
@@ -18,6 +20,9 @@ def safe_run_automation(socketio_instance, **kwargs):
         socketio_instance.emit("automation-status", {
             "status": "idle",
         })
+        if dobot_logger:
+            dobot_logger.stop()
+            dobot_logger = None
         kill_recording(socketio_instance)
         if dashboard:
             disable_robot(dashboard)
@@ -38,7 +43,7 @@ def run_automation(
       - Iterates through the given number of loops,
       - Moves the robot through sequence of points and records audio+video.
     """
-    global dashboard
+    global dashboard, dobot_logger
     print("Executing 'run_automation'")
 
     socketio_instance.emit("automation-status", {
@@ -56,6 +61,8 @@ def run_automation(
     first_point = (points[0]['x'], points[0]['y'], points[0]['z'], points[0]['r'])
 
     for i in range(num_iterations):
+
+        dobot_logger = None
 
         if stop_event.is_set():
             print("Stop event triggered. Exiting loop.")
@@ -76,6 +83,10 @@ def run_automation(
 
         if not is_started:
             continue
+
+        dobot_filepath = os.path.join("dobot", f"{output_filename_prefix}.csv")
+        dobot_logger = DobotLogger(dashboard, dobot_filepath)
+        dobot_logger.start()
 
         time.sleep(0.5)
         print(f"Recording {i+1}/{num_iterations} started.")
@@ -98,6 +109,7 @@ def run_automation(
             time.sleep(0.5)
 
         stop_recording(socketio_instance)
+        dobot_logger.stop_and_save()
 
         time.sleep(1)
 
