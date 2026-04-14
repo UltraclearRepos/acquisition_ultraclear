@@ -62,8 +62,6 @@ def run_automation(
 
     for i in range(num_iterations):
 
-        dobot_logger = None
-
         if stop_event.is_set():
             print("Stop event triggered. Exiting loop.")
             break
@@ -92,10 +90,7 @@ def run_automation(
         print(f"Recording {i+1}/{num_iterations} started.")
 
         # Follow the rest of the points (if there's more than 1 point)
-        for idx in range(1, len(points)):
-            if stop_event.is_set():
-                break
-            
+        for idx in range(1, len(points)):           
             p = points[idx]
             target_point = (p['x'], p['y'], p['z'], p['r'])
             move_to_position(dashboard, move, target_point, speed_l=speed)
@@ -110,6 +105,7 @@ def run_automation(
 
         stop_recording(socketio_instance)
         dobot_logger.stop_and_save()
+        dobot_logger = None
 
         time.sleep(1)
 
@@ -117,6 +113,7 @@ def run_automation(
 
     disable_robot(dashboard)
     dashboard = None
+    dobot_logger = None
     socketio_instance.emit("automation-status", {
         "status": "idle",
     })
