@@ -145,7 +145,7 @@ class USGScanner(threading.Thread):
         self.record_start_time = time.time()
         self.is_recording = True
 
-    def stop_recording(self, video_path):
+    def stop_recording(self, video_path, video_time_path):
         self.is_recording = False
         self.record_stop_time = time.time()
         
@@ -154,6 +154,13 @@ class USGScanner(threading.Thread):
         real_fps = data_len / total_duration if total_duration > 0 else 25.0
         
         print(f"USG Recording saved. {data_len} frames @ {real_fps:.2f} FPS")
+
+        with open(video_time_path, 'w') as f:
+            f.write("timestamp,frame_index\n")
+            for idx, (timestamp, _) in enumerate(self.recorded_frames):
+                f.write(f"{timestamp:.6f},{idx}\n")
+
+        print(f"USG timestamps saved successfully to {video_time_path}")
 
         if data_len > 0:
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')

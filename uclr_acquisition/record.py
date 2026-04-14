@@ -33,8 +33,10 @@ def stop_recording(socketio_instance):
     
     if sensors.usg_scanner and sensors.usg_scanner.is_initialized and filename_prefix:
         os.makedirs("usg", exist_ok=True)
+        os.makedirs("usg_timestamps", exist_ok=True)
         usg_video_path = os.path.join("usg", f"{filename_prefix}.mp4")
-        sensors.usg_scanner.stop_recording(usg_video_path)
+        usg_timestamp_path = os.path.join("usg_timestamps", f"{filename_prefix}.csv")
+        sensors.usg_scanner.stop_recording(usg_video_path, usg_timestamp_path)
 
     time.sleep(0.3)
     socketio_instance.emit("record", {
