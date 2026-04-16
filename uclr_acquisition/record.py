@@ -9,7 +9,7 @@ def start_recording(output_filename_prefix, socketio_instance):
     global filename_prefix
     filename_prefix = output_filename_prefix
 
-    video_filename = f"{output_filename_prefix}.mp4"
+    video_filename = f"{output_filename_prefix}.webm"
 
     socketio_instance.emit("record", {
         "action": "start",
