@@ -57,18 +57,27 @@ def kill_recording(socketio_instance):
 
 
 def delete_last_recording():
-    videos_deleted = delete_videos(folder='videos')
-    usg_deleted = delete_usg(folder="usg")
+    videos_deleted = delete_with_suffix(folder='videos')
+    usg_deleted = delete(folder="usg")
+    usg_ts_deleted = delete(folder="usg_timestamps")
+    video_ts_deleted = delete(folder="video_timestamps")
+    dobot_deleted = delete(folder="dobot")
 
     parts = []
     if videos_deleted:
         parts.append("Video")
     if usg_deleted:
         parts.append("USG")
+    if video_ts_deleted:
+        parts.append("VideoTimestamps")
+    if usg_ts_deleted:
+        parts.append("USGTimestamps")
+    if dobot_deleted:
+        parts.append("Dobot")
     
     return " + ".join(parts) if parts else ""
 
-def delete_videos(folder):
+def delete_with_suffix(folder):
     files = {}
     for file in os.listdir(folder):
         parts = file.split("_")
@@ -90,7 +99,7 @@ def delete_videos(folder):
     return True
 
 
-def delete_usg(folder):
+def delete(folder):
     files = {}
     for file in os.listdir(folder):
         parts = file.split("_")

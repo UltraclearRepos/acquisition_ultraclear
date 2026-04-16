@@ -43,6 +43,22 @@ def upload_video():
     file.save(file_path)
     print(f"File saved to {file_path}")
 
+    start_timestamp = request.form.get("start_timestamp")
+    if start_timestamp:
+        video_ts_dir = os.path.join(os.getcwd(), "video_timestamps")
+        os.makedirs(video_ts_dir, exist_ok=True)
+        base = os.path.splitext(filename)[0]
+        for suffix in ("_cam1", "_cam2"):
+            if base.endswith(suffix):
+                base = base[:-len(suffix)]
+                break
+        video_ts_path = os.path.join(video_ts_dir, f"{base}.csv")
+        if not os.path.exists(video_ts_path):
+            with open(video_ts_path, 'w') as f:
+                f.write("source,start_timestamp\n")
+                f.write(f"cam1_cam2,{start_timestamp}\n")
+            print(f"Camera start timestamp saved to {video_ts_path}")
+
     return jsonify({"status": "ok", "filename": filename})
 
 

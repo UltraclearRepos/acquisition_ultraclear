@@ -38,6 +38,7 @@ let shouldUpload = true;
 let recordingStartTime = null;
 let recordingTimerInterval = null;
 let sharedAudioTrack = null;
+let camStartTimestamp = null;
 
 const automationForm = document.getElementById("automationForm");
 const sleepTimeEl = document.getElementById("sleepTime");
@@ -159,6 +160,9 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 			const blob = new Blob(chunks, { type: "video/webm" });
 			const formData = new FormData();
 			formData.append("file", blob, filename);
+			if (camStartTimestamp !== null) {
+				formData.append("start_timestamp", camStartTimestamp);
+			}
 
 			await fetch("/upload", {
 				method: "POST",
@@ -259,7 +263,10 @@ function waitVideoPlaying(videoEl) {
 
 function startSimultaneously(...starts) {
 	const mc = new MessageChannel();
-	mc.port1.onmessage = () => starts.forEach(s => s());
+	mc.port1.onmessage = () => {
+		camStartTimestamp = Date.now() / 1000;
+		starts.forEach(s => s());
+	};
 	mc.port2.postMessage(null);
 }
 
