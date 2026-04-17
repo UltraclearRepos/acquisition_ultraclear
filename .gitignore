@@ -3,7 +3,10 @@
 setup.json
 uclr_acquisition/__pycache__
 uclr_acquisition/sensors/__pycache__
+__pycache__/
 usg/
 videos/
 usg_timestamps/
 dobot/
+video_timestamps/
+synced/
