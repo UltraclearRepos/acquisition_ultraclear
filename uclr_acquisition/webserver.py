@@ -156,8 +156,8 @@ def stop():
 def start_manual():
     print("Received start-manual/POST request")
     params = request.get_json(force=True)
-    description = params.get("description", "")
-    username = params.get("username", "")
+    description = params.get("description")
+    username = params.get("username")
     
     prefix = build_filename(username, description)
     

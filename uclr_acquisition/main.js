@@ -122,6 +122,7 @@ socket.on("automation-status", (msg) => {
 	if (status === "running") {
 		toggleButtons(true);
 		startRecordingTimer();
+		stopRecordingBt.disabled = true;
 	} else {
 		toggleButtons(false);
 		stopRecordingTimer();
