@@ -134,6 +134,7 @@ def run():
             speed = int(params["speed"]),
             description = params.get("description", ""),
             num_iterations = int(params["iterations"]),
+            num_repetitions = int(params.get("repetitions", 1)),
             sleep_time = int(params.get("sleepTime", 3)),
             stop_event = stop_event,
             socketio_instance=socketio

@@ -5,6 +5,7 @@
 
 
 const iterEl = document.getElementById("iterations");
+const repetitionsEl = document.getElementById("repetitions")
 const descriptionEl = document.getElementById("description");
 const startAutomationBt = document.getElementById("startTests");
 const stopAutomationBt = document.getElementById("stopTests");
@@ -367,10 +368,15 @@ function startAutomation() {
 	const description = descriptionEl.value;
 	const iterInput = iterEl.value;
 	const iterations = iterInput ? parseInt(iterInput, 10) || 1 : 1;
+	const repetitionsInput = repetitionsEl.value;
+	const repetitions = repetitionsInput ? parseInt(repetitionsInput, 10) || 1 : 1;
 	const sleepTime = parseInt(sleepTimeEl.value);
 
 	if (iterations <= 0) {
 		return alert("Iterations must be greater then 0");
+	}
+	if (repetitions <= 0) {
+		return alert("Repetitions must be greater then 0");
 	}
 
 	const points = Array.from(document.querySelectorAll('.point-row')).map(row => {
@@ -390,6 +396,7 @@ function startAutomation() {
 		speed: speed,
 		description: description,
 		iterations: iterations,
+		repetitions: repetitions,
 		points: points,
 		sleepTime: sleepTime
 	};

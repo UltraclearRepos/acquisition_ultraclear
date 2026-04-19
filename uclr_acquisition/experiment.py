@@ -34,6 +34,7 @@ def run_automation(
         speed, 
         description, 
         num_iterations, 
+        num_repetitions,
         sleep_time, 
         stop_event, 
         socketio_instance):
@@ -89,19 +90,26 @@ def run_automation(
         time.sleep(0.5)
         print(f"Recording {i+1}/{num_iterations} started.")
 
-        # Follow the rest of the points (if there's more than 1 point)
-        for idx in range(1, len(points)):           
-            p = points[idx]
-            target_point = (p['x'], p['y'], p['z'], p['r'])
-            move_to_position(dashboard, move, target_point, speed_l=speed)
-            print(f'Moving to point {idx + 1}: {target_point}')
-            time.sleep(sleep_time)
+        for _ in range(num_repetitions):
+            if stop_event.is_set():
+                break
 
-        # Go back to the first point to close the loop
-        if len(points) > 1 and not stop_event.is_set():
-            move_to_position(dashboard, move, first_point, speed_l=speed)
-            print(f'Moving back to initial position: {first_point}')
-            time.sleep(0.5)
+            for idx in range(1, len(points)):
+                if stop_event.is_set():
+                    break        
+                p = points[idx]
+                target_point = (p['x'], p['y'], p['z'], p['r'])
+                move_to_position(dashboard, move, target_point, speed_l=speed)
+                print(f'Moving to point {idx + 1}: {target_point}')
+                time.sleep(sleep_time)
+
+            # Go back to the first point to close the loop
+            if len(points) > 1 and not stop_event.is_set():
+                move_to_position(dashboard, move, first_point, speed_l=speed)
+                print(f'Moving back to initial position: {first_point}')
+                time.sleep(sleep_time)
+        
+        time.sleep(0.5)
 
         stop_recording(socketio_instance)
         dobot_logger.stop_and_save()
@@ -128,5 +136,6 @@ if __name__ == "__main__":
         p1=None,
         p2=None,
         p3=None,
-        num_iterations=None
+        num_iterations=None,
+        num_repetitions=None
     ) 
