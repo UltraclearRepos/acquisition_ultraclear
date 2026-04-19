@@ -172,6 +172,66 @@ input[type="number"] {
     cursor: pointer;
 }
 
+.toggle-switch {
+    position: relative;
+    width: 100%;
+    margin-top: 2px;
+    margin-bottom: 4px;
+}
+
+.toggle-switch input[type="checkbox"] {
+    display: none;
+}
+
+.switch-label {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ccc;
+    border-radius: 20px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+    user-select: none;
+    overflow: hidden;
+}
+
+.switch-label .label {
+    z-index: 2;
+    width: 50%;
+    text-align: center;
+    transition: color 0.3s ease;
+}
+
+.switch-label .slider {
+    position: absolute;
+    top: 2px;
+    bottom: 2px;
+    left: 2px;
+    width: calc(50% - 4px);
+    background-color: #4CAF50;
+    border-radius: 18px;
+    transition: all 0.3s ease;
+    z-index: 1;
+}
+
+.toggle-switch input[type="checkbox"]:checked+.switch-label .slider {
+    left: calc(50% + 2px);
+    background-color: #2196F3;
+}
+
+.toggle-switch input[type="checkbox"]:checked+.switch-label .automation-label {
+    color: #ffffffaa;
+}
+
+.toggle-switch input[type="checkbox"]:not(:checked)+.switch-label .manual-label {
+    color: #ffffffaa;
+}
+
 
 .simple-toggle {
     position: relative;
@@ -239,23 +299,27 @@ button {
     transition: background-color 0.3s;
 }
 
-#startTests {
+#startTests,
+#startRecording {
     background-color: #4CAF50;
     color: white;
 }
 
-#startTests:disabled {
+#startTests:disabled,
+#startRecording:disabled {
     background-color: #a5d6a7;
     color: #ffffffcc;
     cursor: not-allowed;
 }
 
-#stopTests {
+#stopTests,
+#stopRecording {
     background-color: #f44336;
     color: white;
 }
 
-#stopTests:disabled {
+#stopTests:disabled,
+#stopRecording:disabled {
     background-color: #e0e0e0;
     color: #888;
     cursor: not-allowed;

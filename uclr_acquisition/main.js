@@ -13,6 +13,12 @@ const automationStatusEl = document.getElementById("automationStatus");
 const iterationCounterEl = document.getElementById("iterationCounter");
 const deleteRecordingBt = document.getElementById("deleteRecording");
 
+const usernameEl = document.getElementById("username");
+const modeToggle = document.getElementById("modeToggle");
+const startRecordingBt = document.getElementById("startRecording");
+const stopRecordingBt = document.getElementById("stopRecording");
+const manualForm = document.getElementById("manualForm");
+
 
 const speedSlider = document.getElementById("speed");
 const speedValueEl = document.getElementById("speedValue");
@@ -351,15 +357,11 @@ function log(message) {
 }
 
 function toggleButtons(automation_running) {
-	if (automation_running === true) {
-		startAutomationBt.disabled = true;
-		stopAutomationBt.disabled = false;
-		if (toggleUsgBtn) toggleUsgBtn.disabled = true;
-	} else {
-		startAutomationBt.disabled = false;
-		stopAutomationBt.disabled = true;
-		if (toggleUsgBtn) toggleUsgBtn.disabled = false;
-	}
+	startAutomationBt.disabled = automation_running;
+	stopAutomationBt.disabled = !automation_running;
+	startRecordingBt.disabled = automation_running;
+	stopRecordingBt.disabled = !automation_running;
+	toggleUsgBtn.disabled = automation_running;
 }
 
 function startAutomation() {
@@ -454,6 +456,62 @@ function addPointRow() {
 	row.querySelector('.remove-point-btn').addEventListener('click', () => row.remove());
 }
 
+function startManualRecording() {
+	const description = descriptionEl.value;
+	const username = usernameEl.value.trim();
+
+	if (!username) {
+		return alert("Please pass username");
+	}
+
+	fetch("/start-manual", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ description: description, username: username })
+	})
+		.then(res => res.json())
+		.then(data => {
+			if (data.status === "ok") {
+				toggleButtons(true);
+				startRecordingTimer();
+				stopAutomationBt.disabled = true;
+			} else {
+				console.warn("Failed to start recording: ", data.message);
+			}
+		})
+		.catch(err => {
+			console.error("Error starting recording: ", err);
+		});
+}
+
+function stopManualRecording() {
+	stopRecordingBt.disabled = true;
+	fetch("/stop-manual", { method: "POST" })
+		.then(res => res.json())
+		.then(data => {
+			if (data.status === "ok") {
+				toggleButtons(false);
+				stopRecordingTimer();
+			}
+		})
+		.catch(err => {
+			console.error("Error stopping recording: ", err);
+		});
+}
+
+function startRecordingTimer() {
+	recordingStartTime = Date.now();
+	recordingTimerInterval = setInterval(() => {
+		const duration = Math.floor((Date.now() - recordingStartTime) / 1000);
+		timerEl.textContent = `Timer: ${duration}s`
+	}, 1000);
+}
+
+function stopRecordingTimer() {
+	clearInterval(recordingTimerInterval);
+	timerEl.textContent = "Timer: 0s";
+}
+
 function deleteLastRecording() {
 	deleteRecordingBt.disabled = true;
 	fetch("/delete-last-recording", {
@@ -491,8 +549,21 @@ function deleteLastRecording() {
 
 })();
 
+
+modeToggle.addEventListener("change", function () {
+	if (modeToggle.checked) {
+		automationForm.style.display = "none";
+		manualForm.style.display = "block";
+	} else {
+		automationForm.style.display = "block";
+		manualForm.style.display = "none";
+	}
+});
+
 startAutomationBt.addEventListener("click", startAutomation);
 stopAutomationBt.addEventListener("click", stopAutomation);
+startRecordingBt.addEventListener("click", startManualRecording);
+stopRecordingBt.addEventListener("click", stopManualRecording);
 deleteRecordingBt.addEventListener("click", deleteLastRecording);
 speedSlider.addEventListener("input", (e) => {
 	speedValueEl.textContent = e.target.value;

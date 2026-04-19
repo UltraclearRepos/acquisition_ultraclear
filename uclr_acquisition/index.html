@@ -47,6 +47,18 @@
                             <input type="text" id="description" />
                         </div>
 
+                        <div class="form-group">
+                            <label for="modeToggle">Mode</label>
+                            <div class="toggle-switch">
+                                <input type="checkbox" id="modeToggle" />
+                                <label class="switch-label" for="modeToggle">
+                                    <span class="label automation-label">Automation</span>
+                                    <span class="label manual-label">Manual Recording</span>
+                                    <span class="slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
                         <div id="automationForm">
                             <div class="form-group horizontal-group">
                                 <label for="iterations">Number of iterations</label>
@@ -76,6 +88,17 @@
                             <div id="controls">
                                 <button id="startTests">Start automation</button>
                                 <button id="stopTests" disabled>Stop automation</button>
+                            </div>
+                        </div>
+
+                        <div id="manualForm" style="display: none;">
+                            <div class="form-group">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" />
+                            </div>
+                            <div id="controls">
+                                <button id="startRecording">Start recording</button>
+                                <button id="stopRecording" disabled>Stop recording</button>
                             </div>
                         </div>
 

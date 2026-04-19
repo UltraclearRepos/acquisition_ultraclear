@@ -146,12 +146,32 @@ def run():
 
     return jsonify({"status": "started"})
 
-
 @app.route("/stop", methods=['POST'])
 def stop():
     print("Received stop/POST request")
     stop_event.set()
     return jsonify({"status": "Will stop after current iteration."})
+
+@app.route("/start-manual", methods=['POST'])
+def start_manual():
+    print("Received start-manual/POST request")
+    params = request.get_json(force=True)
+    description = params.get("description", "")
+    username = params.get("username", "")
+    
+    prefix = build_filename(username, description)
+    
+    success = start_recording(prefix, socketio)
+    if success:
+        return jsonify({"status": "ok"})
+    else:
+        return jsonify({"error": "Failed to start recording"}), 500
+
+@app.route("/stop-manual", methods=['POST'])
+def stop_manual():
+    print("Received stop-manual/POST request")
+    stop_recording(socketio)
+    return jsonify({"status": "ok"})
 
 @app.route('/delete-last-recording', methods=['POST'])
 def post_delete_last_recording():

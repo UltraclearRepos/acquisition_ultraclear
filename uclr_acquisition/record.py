@@ -16,13 +16,6 @@ def start_recording(output_filename_prefix, socketio_instance):
         "filename": video_filename
     })
 
-    # is_started = True
-    # if not is_started:
-    #     socketio_instance.emit("record", {
-    #         "action": "stop",
-    #         "shouldUpload": False
-    #     })
-    #     return False
     if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
         sensors.usg_scanner.start_recording()
     
