@@ -118,17 +118,17 @@ class USGScanner(threading.Thread):
             print("Ultrasound connection closed.")
             
     def turn_on(self):
-        """Wznawia fizyczne skanowanie USG"""
+        """Resumes physical ultrasound scanning"""
         self.target_frozen = False
 
     def turn_off(self):
-        """Zamraża fizyczne skanowanie USG (oszczędza sprzęt)"""
+        """Freezes physical ultrasound scanning (saves hardware)"""
         if self.is_recording:
-            msg = "Zatrzymywanie zablokowane - trwa zgrywanie danych."
-            print(f"Pominięto: {msg}")
+            msg = "Stopping blocked - data recording in progress."
+            print(f"Skipped: {msg}")
             return False, msg
         self.target_frozen = True
-        return True, "Pomyślnie zamrożono skanowanie."
+        return True, "Successfully frozen scanning."
 
     def start_recording(self):
         self.was_frozen = self.target_frozen

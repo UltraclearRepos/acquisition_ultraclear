@@ -200,7 +200,7 @@ def main():
         sensors.usg_scanner = USGScanner(config["usg_dll_path"])
         sensors.usg_scanner.start()
     except Exception as e:
-        print(f"Nie powiodło się uruchomienie USG: {e}")
+        print(f"Failed to start USG: {e}")
 
     port = args.port
     url = "http://127.0.0.1:{0}".format(port)
