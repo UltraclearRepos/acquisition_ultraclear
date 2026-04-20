@@ -1,5 +1,5 @@
 from .config import config
-from uclr_acquisition import sensors
+from uclr_acquisition import sensors, trackers
 import time
 import os
 
@@ -7,6 +7,18 @@ filename_prefix = None
 
 def start_recording(output_filename_prefix, socketio_instance):
     global filename_prefix
+
+    unavailable = []
+    if not sensors.usg_scanner or not sensors.usg_scanner.is_initialized:
+        unavailable.append("USG")
+    if not trackers.tracker or not trackers.tracker.is_connected:
+        unavailable.append("Tracker")
+
+    if unavailable:
+        msg = ", ".join(unavailable) + " not available"
+        print(f"Recording blocked: {msg}")
+        return False, msg
+
     filename_prefix = output_filename_prefix
 
     video_filename = f"{output_filename_prefix}.webm"
@@ -16,10 +28,10 @@ def start_recording(output_filename_prefix, socketio_instance):
         "filename": video_filename
     })
 
-    if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
-        sensors.usg_scanner.start_recording()
-    
-    return True
+    sensors.usg_scanner.start_recording()
+    trackers.tracker.start_recording()
+
+    return True, None
 
 def stop_recording(socketio_instance):
     global filename_prefix
@@ -30,6 +42,9 @@ def stop_recording(socketio_instance):
         usg_video_path = os.path.join("usg", f"{filename_prefix}.mp4")
         usg_timestamp_path = os.path.join("usg_timestamps", f"{filename_prefix}.csv")
         sensors.usg_scanner.stop_recording(usg_video_path, usg_timestamp_path)
+
+    if trackers.tracker and trackers.tracker.is_connected and filename_prefix:
+        trackers.tracker.stop_recording(filename_prefix)
 
     time.sleep(0.3)
     socketio_instance.emit("record", {
@@ -46,6 +61,8 @@ def kill_recording(socketio_instance):
     })
     if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
         sensors.usg_scanner.kill_recording()
+    if trackers.tracker and trackers.tracker.is_connected:
+        trackers.tracker.kill_recording()
     filename_prefix = None
 
 
@@ -55,6 +72,7 @@ def delete_last_recording():
     usg_ts_deleted = delete(folder="usg_timestamps")
     video_ts_deleted = delete(folder="video_timestamps")
     dobot_deleted = delete(folder="dobot")
+    tracker_deleted = delete(folder="tracker")
 
     parts = []
     if videos_deleted:
@@ -67,6 +85,8 @@ def delete_last_recording():
         parts.append("USGTimestamps")
     if dobot_deleted:
         parts.append("Dobot")
+    if tracker_deleted:
+        parts.append("Tracker")
     
     return " + ".join(parts) if parts else ""
 

@@ -14,9 +14,10 @@ import os
 from pathlib import Path
 from flask_socketio import SocketIO
 import sounddevice as sd
-from uclr_acquisition import sensors
+from uclr_acquisition import sensors, trackers
 from uclr_acquisition.config import config
 from uclr_acquisition.sensors.usg import USGScanner
+from uclr_acquisition.trackers.imu import IMUTracker
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -161,11 +162,11 @@ def start_manual():
     
     prefix = build_filename(username, description)
     
-    success = start_recording(prefix, socketio)
+    success, msg = start_recording(prefix, socketio)
     if success:
         return jsonify({"status": "ok"})
     else:
-        return jsonify({"error": "Failed to start recording"}), 500
+        return jsonify({"error": msg}), 500
 
 @app.route("/stop-manual", methods=['POST'])
 def stop_manual():
@@ -201,6 +202,12 @@ def main():
         sensors.usg_scanner.start()
     except Exception as e:
         print(f"Failed to start USG: {e}")
+
+    try:
+        trackers.tracker = IMUTracker()
+        trackers.tracker.start()
+    except Exception as e:
+        print(f"Failed to start IMU Tracker: {e}")
 
     port = args.port
     url = "http://127.0.0.1:{0}".format(port)
