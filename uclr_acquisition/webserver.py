@@ -1,30 +1,27 @@
 import eventlet
 eventlet.monkey_patch()
 
-import numpy as np
+from flask import Flask, request, jsonify, send_from_directory, Response
 import cv2
-import base64
-from flask import Flask, request, jsonify, send_from_directory
-from vnav_acquisition.comm import is_ssh_connected, ssh_connect, on_rec_start, on_rec_stop, start_live_data_stream, stop_live_data_stream
-from vnav_acquisition.config import config
-from vnav_acquisition.runtime_config import runtime_config
-from vnav_acquisition.automation import safe_run_automation
+from uclr_acquisition.config import config
+from uclr_acquisition.experiment import safe_run_automation
 from .record import start_recording, stop_recording, delete_last_recording
 from .utils import build_filename, get_local_ip_address
-from .track_position import detect_cube_pose
 import threading
 import webbrowser
 import argparse
-import os   # Berke 16.09.2024
+import os
 from pathlib import Path
 from flask_socketio import SocketIO
 import sounddevice as sd
-import time
+from uclr_acquisition import sensors, trackers
+from uclr_acquisition.config import config
+from uclr_acquisition.sensors.usg import USGScanner
+from uclr_acquisition.trackers.imu import IMUTracker
 
 
 BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR
-IP_FILE = BASE_DIR / "pc_ip.txt"
 
 app = Flask(__name__, static_folder=str(STATIC_DIR), static_url_path="")
 app.config["JSON_AS_ASCII"] = False
@@ -47,6 +44,22 @@ def upload_video():
     file.save(file_path)
     print(f"File saved to {file_path}")
 
+    start_timestamp = request.form.get("start_timestamp")
+    if start_timestamp:
+        video_ts_dir = os.path.join(os.getcwd(), "video_timestamps")
+        os.makedirs(video_ts_dir, exist_ok=True)
+        base = os.path.splitext(filename)[0]
+        for suffix in ("_cam1", "_cam2"):
+            if base.endswith(suffix):
+                base = base[:-len(suffix)]
+                break
+        video_ts_path = os.path.join(video_ts_dir, f"{base}.csv")
+        if not os.path.exists(video_ts_path):
+            with open(video_ts_path, 'w') as f:
+                f.write("source,start_timestamp\n")
+                f.write(f"cam1_cam2,{start_timestamp}\n")
+            print(f"Camera start timestamp saved to {video_ts_path}")
+
     return jsonify({"status": "ok", "filename": filename})
 
 
@@ -54,14 +67,53 @@ def upload_video():
 def frontpage():
     return send_from_directory(STATIC_DIR, "index.html")
 
+@app.route('/usg_feed')
+def usg_feed():
+    def generate():
+        while True:
+            if sensors.usg_scanner is None or not sensors.usg_scanner.is_initialized:
+                eventlet.sleep(1)
+                continue
+            
+            with sensors.usg_scanner.lock:
+                frame = sensors.usg_scanner.latest_frame
+
+            if frame is not None:
+                ret, buffer = cv2.imencode('.jpg', frame)
+                if ret:
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
+            
+            eventlet.sleep(0.03)
+            
+    return Response(generate(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/usg-toggle', methods=['POST'])
+def usg_toggle():
+
+    print("Received usg-toggle/POST request")
+
+    if sensors.usg_scanner is None:
+        return jsonify({"status": "error", "message": "USG not initialized"})
+    
+    data = request.json
+    action = data.get("action")
+    print(f'With action: {action}')
+    
+    if action == "turn_on":
+        sensors.usg_scanner.turn_on()
+    elif action == "turn_off":
+        success, msg = sensors.usg_scanner.turn_off()
+        if not success:
+            return jsonify({"status": "error", "message": msg})
+            
+    return jsonify({"status": "ok"})
+
 @app.route("/config", methods=['GET'])
 def api_config():
     print("Received config/GET request")
     return jsonify({
-        "materials": config["materials"],
-        "speeds": config["speeds"],
-        "needleTypes": config["needleTypes"],
-        "sensorVersions": config["sensorVersions"]
+        "speeds": config["speeds"]
     })
 
 @app.route("/run", methods=["POST"])
@@ -71,7 +123,7 @@ def run():
     params = request.get_json(force=True)
     print(f'With params: {params}')
 
-    required = ("material", "speed", "needleType", "iterations", "initX", "finishX", "upZ", "downZ", "motionType")
+    required = ("speed", "iterations", "points")
     if not all(param in params for param in required):
         return jsonify({"error": "Missing parameters"}), 400
     
@@ -79,22 +131,13 @@ def run():
     automation_thread = threading.Thread(
         target=safe_run_automation,
         kwargs=dict(
-            material = params["material"],
-            needle_type = params["needleType"],
-            microphone_type = params["microphoneType"],
-            description = params["description"],
-            stop_event = stop_event,
-            initX = params["initX"],
-            finishX = params["finishX"],
-            upZ = params["upZ"],
-            downZ = params["downZ"],
-            y = params["y"],
-            r = params["r"],
+            points = params["points"],
             speed = int(params["speed"]),
-            motion_type = params["motionType"],
-            num_iterations = params["iterations"],
-            interval = params["interval"],
-            sleep_time = params["sleepTime"],
+            description = params.get("description", ""),
+            num_iterations = int(params["iterations"]),
+            num_repetitions = int(params.get("repetitions", 1)),
+            sleep_time = int(params.get("sleepTime", 3)),
+            stop_event = stop_event,
             socketio_instance=socketio
         ),
         daemon=True
@@ -104,96 +147,30 @@ def run():
 
     return jsonify({"status": "started"})
 
-
 @app.route("/stop", methods=['POST'])
 def stop():
     print("Received stop/POST request")
     stop_event.set()
     return jsonify({"status": "Will stop after current iteration."})
 
-
-@app.route("/raspberry-status", methods=['GET'])
-def check_connection():
-    import logging
-    werkzeug_log = logging.getLogger('werkzeug')
-    prev_level = werkzeug_log.level
-    werkzeug_log.setLevel(logging.ERROR)
-
-    try:
-        is_connected = is_ssh_connected()
-        if is_connected:
-            return jsonify({"status": "connected"})
-        else:
-            return jsonify({"status": "not connected"})
-    finally:
-        werkzeug_log.setLevel(prev_level)
-
-@app.route("/set-micro-output", methods=['POST'])
-def set_micro_output():
-    print("Received set-micro-output/POST request")
+@app.route("/start-manual", methods=['POST'])
+def start_manual():
+    print("Received start-manual/POST request")
     params = request.get_json(force=True)
-    print(f'With params: {params}')
-    output_name = params.get("micro_output")
-
-    if not output_name:
-        return jsonify({"error": "Missing 'micro_output' parameter"}), 400
-    
-    if output_name == "No Audio":
-        runtime_config.set_value('micro_output', None)
-    else:
-        for idx, dev in enumerate(sd.query_devices()):
-            if output_name in dev['name'] and dev['max_output_channels'] > 0:
-                runtime_config.set_value('micro_output', idx)
-                return jsonify({"status": "ok", "micro_output": idx})
-        
-    return jsonify({"error": f"Audio output '{output_name}' not found"}), 404
-
-@app.route('/get-audio-outputs', methods=['GET'])
-def get_audio_outputs():
-    print("Received get-audio-outputs/GET request")
-    seen = set()
-    outputs = []
-    default_hostapi = sd.default.hostapi
-
-    for idx, dev in enumerate(sd.query_devices()):
-        name = dev['name'].strip()
-        if (dev['max_output_channels'] > 0 
-            and name 
-            and name not in seen
-            and dev['hostapi'] == default_hostapi):
-            outputs.append({'name': name})
-            seen.add(name)
-
-    outputs.insert(0, {'name': 'No Audio'})
-
-    print(f"Available audio outputs: {outputs}")
-    return jsonify(outputs)
-
-@app.route('/start-recording', methods=['POST'])
-def post_start_recording():
-    print("Received start-recording/POST request")
-
-    params = request.get_json(force=True)
-    print(f'With params: {params}')
-
-    username = params.get("username")
-    material = params.get("material")
-    needle_type = params.get("needleType")
-    microphone_type = params.get("microphoneType")
     description = params.get("description")
-    output_filename_prefix = build_filename(username, description, material, needle_type, microphone_type)
-
-    is_started = start_recording(output_filename_prefix, socketio)
-    if not is_started:
-        return jsonify({"error": "Recording could not be started"}), 400
+    username = params.get("username")
     
-    return jsonify({"status": "ok"})
-
-
-@app.route('/stop-recording', methods=['POST'])
-def post_stop_recording():
-    print("Received stop-recording/POST request")
+    prefix = build_filename(username, description)
     
+    success, msg = start_recording(prefix, socketio)
+    if success:
+        return jsonify({"status": "ok"})
+    else:
+        return jsonify({"error": msg}), 500
+
+@app.route("/stop-manual", methods=['POST'])
+def stop_manual():
+    print("Received stop-manual/POST request")
     stop_recording(socketio)
     return jsonify({"status": "ok"})
 
@@ -205,68 +182,6 @@ def post_delete_last_recording():
     if message == "":
         return jsonify({"status": "not found", "message": "No recordings to delete."})
     return jsonify({"status": "ok", "message": message})
-
-@app.route('/detect-cube', methods=['POST'])
-def detect_cube():
-
-    buffer = request.files["frame"].read()
-    buffer_arr = np.frombuffer(buffer, dtype=np.uint8)
-    frame = cv2.imdecode(buffer_arr, cv2.IMREAD_COLOR)
-    if frame is None:
-        return jsonify({"error": "Invalid image data"}), 400
-
-    res = detect_cube_pose(frame)
-    if res is None:
-        return jsonify({"detected": False})
-    
-    rvec, tvec, R_inv, corners, ids, init_frame = res
-
-    ok, jpg = cv2.imencode(".jpg", init_frame, [int(cv2.IMWRITE_JPEG_QUALITY), 100])
-    if not ok:
-        return jsonify({"error": "Could not encode image"}), 500
-
-    data_url = "data:image/jpeg;base64," + base64.b64encode(jpg.tobytes()).decode('utf-8')
-
-    return jsonify({
-        "detected": True,
-        "image": data_url
-    })
-
-@app.route('/set-micro-filter', methods=['POST'])
-def set_filter_settings():
-    print("Received set-micro-filter/POST request")
-    params = request.get_json(force=True)
-    print(f'With params: {params}')
-
-    enabled = params.get("enabled")
-    low = params.get("low")
-    high = params.get("high")
-
-    runtime_config.set_value('micro_bandpass_enabled', enabled)
-    runtime_config.set_value('micro_bandpass_low', low)
-    runtime_config.set_value('micro_bandpass_high', high)
-    
-    return jsonify({"status": "ok"})
-
-@app.route('/start-stream', methods=['POST'])
-def start_stream():
-    print("Received start-stream/POST request")
-    try:
-        start_live_data_stream(config['connection'], socketio)
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        print(f"Error starting live data stream: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/stop-stream', methods=['POST'])
-def stop_stream():
-    try:
-        stop_live_data_stream(config['connection'], socketio)
-        return jsonify({"status": "ok"})
-    except Exception as e:
-        print(f"Error stopping live data stream: {e}")
-        return jsonify({"error": str(e)}), 500
-    
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Web browser interface for synchronous acquisition of audio "
@@ -282,11 +197,20 @@ def main():
     if args.setup:
         config.load_from_json(args.setup)
 
+    try:
+        sensors.usg_scanner = USGScanner(config["usg_dll_path"])
+        sensors.usg_scanner.start()
+    except Exception as e:
+        print(f"Failed to start USG: {e}")
+
+    try:
+        trackers.tracker = IMUTracker()
+        trackers.tracker.start()
+    except Exception as e:
+        print(f"Failed to start IMU Tracker: {e}")
+
     port = args.port
     url = "http://127.0.0.1:{0}".format(port)
-    IP_FILE.write_text(get_local_ip_address())
-
-    ssh_connect(*config['connection'], socketio_instance=socketio)
 
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     
