@@ -30,7 +30,7 @@ class IMUTracker(threading.Thread):
                 bytesize=serial.EIGHTBITS,
                 parity=serial.PARITY_NONE,
                 stopbits=serial.STOPBITS_ONE,
-                timeout=1
+                timeout=5
             )
             self.ser.reset_input_buffer()
             self.is_connected = True
@@ -59,8 +59,10 @@ class IMUTracker(threading.Thread):
                             self.data_buffer.append((recv_time, line_str))
                 except Exception as e:
                     print(f"IMU reading failed: {e}")
+
+                time.sleep(0.05)
             else:
-                time.sleep(0.005)
+                time.sleep(0.05)
 
         if self.ser and self.ser.is_open:
             self.ser.close()

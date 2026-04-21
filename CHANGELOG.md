@@ -9,3 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Deleted
 ### Changed
 ### Fixed
+
+## [0.2.0] - 2026-04-22
+### Added
+- Usg scanner control
+- Usg scanner live feed
+- Usg scanner recording
+- Dobot logging
+- Dobot control
+- Cameras recording
+- Cameras live feed
+- IMU logging
