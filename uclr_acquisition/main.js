@@ -70,47 +70,62 @@ socket.on("record", async (msg) => {
 	const filename = msg.filename;
 	console.log(action);
 
-	if (!localStream || !localStream2) {
+	if (!localStream && !localStream2) {
 		console.warn("No media stream available to record");
 		return;
 	}
 
 	if (action === "start") {
 
-		onRecordStart({
-			filename: addSuffix(filename, "_cam1"),
-			stream: localStream,
-			setRecorder: (recorder) => mediaRecorder = recorder,
-			setChunks: (chunks) => recordedChunks = chunks,
-		});
-		onRecordStart({
-			filename: addSuffix(filename, "_cam2"),
-			stream: localStream2,
-			setRecorder: (recorder) => mediaRecorder2 = recorder,
-			setChunks: (chunks) => recordedChunks2 = chunks,
-		});
-		console.log("Browser started recording");
+		const starts = [];
 
-		startSimultaneously(
-			() => mediaRecorder.start(),
-			() => mediaRecorder2.start()
-		)
+		if (localStream) {
+			onRecordStart({
+				filename: addSuffix(filename, "_cam1"),
+				stream: localStream,
+				setRecorder: (recorder) => mediaRecorder = recorder,
+				setChunks: (chunks) => recordedChunks = chunks,
+			});
+			starts.push(() => mediaRecorder.start());
+		}
+
+		if (localStream2) {
+			onRecordStart({
+				filename: addSuffix(filename, "_cam2"),
+				stream: localStream2,
+				setRecorder: (recorder) => mediaRecorder2 = recorder,
+				setChunks: (chunks) => recordedChunks2 = chunks,
+			});
+			starts.push(() => mediaRecorder2.start());
+		}
+
+		console.log("Browser started recording");
+		if (starts.length > 0) {
+			startSimultaneously(...starts);
+		}
 
 	}
 
 	console.log(mediaRecorder, mediaRecorder2);
-	if (action === "stop" && mediaRecorder && mediaRecorder.state === "recording" && mediaRecorder2 && mediaRecorder2.state === "recording") {
-		shouldUpload = msg.shouldUpload;
-		if (!shouldUpload) {
-			alert("Recording is not saved!")
+	if (action === "stop") {
+		const isRecording1 = mediaRecorder && mediaRecorder.state === "recording";
+		const isRecording2 = mediaRecorder2 && mediaRecorder2.state === "recording";
+
+		if (isRecording1 || isRecording2) {
+			shouldUpload = msg.shouldUpload;
+			if (!shouldUpload) {
+				alert("Recording is not saved!")
+			}
+
+			if (isRecording1) mediaRecorder.requestData();
+			if (isRecording2) mediaRecorder2.requestData();
+
+			Promise.resolve().then(() => {
+				if (isRecording1) mediaRecorder.stop();
+				if (isRecording2) mediaRecorder2.stop();
+				console.log("Browser stopped recording");
+			});
 		}
-		mediaRecorder.requestData();
-		mediaRecorder2.requestData();
-		Promise.resolve().then(() => {
-			mediaRecorder.stop();
-			mediaRecorder2.stop();
-			console.log("Browser stopped recording");
-		})
 	}
 
 });
@@ -152,7 +167,8 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 	const chunks = [];
 
 	const recorder = new MediaRecorder(stream, {
-		mimeType: "video/webm; codecs=h264"
+		mimeType: "video/webm; codecs=vp9",
+		videoBitsPerSecond: 100000000
 	})
 
 	recorder.ondataavailable = (event) => {
@@ -217,10 +233,16 @@ async function loadConfig() {
 	}
 }
 
-function gotDevices(deviceInfos) {
+function getDevices(deviceInfos) {
 	// Handles being called several times to update labels. Preserve values.
 	const values = selectors.map(select => select.value);
-	selectors.forEach((select) => (select.innerHTML = ""));
+	selectors.forEach((select) => {
+		select.innerHTML = "";
+		const noneOption = document.createElement("option");
+		noneOption.value = "none";
+		noneOption.text = "None";
+		select.appendChild(noneOption);
+	});
 
 	console.log(deviceInfos)
 
@@ -284,6 +306,9 @@ async function getSharedAudioTrack() {
 	}
 
 	const audioSource = audioInputSelect.value;
+	if (audioSource === "none") {
+		return null;
+	}
 	const audioStream = await navigator.mediaDevices.getUserMedia({
 		audio: {
 			deviceId: audioSource ? { exact: audioSource } : undefined
@@ -295,20 +320,24 @@ async function getSharedAudioTrack() {
 
 }
 
-async function buildComposedStream(videoDeviceId) {
+async function buildComposedStream(videoDeviceId, targetWidth, targetHeight) {
 	const audioTrack = await getSharedAudioTrack();
 	const videoStream = await navigator.mediaDevices.getUserMedia({
 		video: {
 			deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
-			width: { min: 640, ideal: 1280, max: 1280 },
-			height: { min: 480, ideal: 720, max: 720 },
+			width: { exact: targetWidth },
+			height: { exact: targetHeight },
 			frameRate: 30
 		},
 		audio: false
 	});
 	const videoTrack = videoStream.getVideoTracks()[0];
 
-	const composed = new MediaStream([videoTrack, audioTrack]);
+	const tracks = [videoTrack];
+	if (audioTrack) {
+		tracks.push(audioTrack);
+	}
+	const composed = new MediaStream(tracks);
 	return { composed, videoTrack }
 }
 
@@ -317,7 +346,15 @@ async function startFirstCamera() {
 
 	try {
 		const videoSource = videoSelect.value;
-		const { composed } = await buildComposedStream(videoSource);
+		if (videoSource === "none") {
+			if (localStream) {
+				localStream.getTracks().forEach(t => t.stop());
+				localStream = null;
+				liveVideoElement.srcObject = null;
+			}
+			return;
+		}
+		const { composed } = await buildComposedStream(videoSource, 640, 360);
 		localStream = composed;
 		liveVideoElement.srcObject = localStream;
 		await waitTrackLive(localStream.getAudioTracks()[0]);
@@ -331,7 +368,19 @@ async function startFirstCamera() {
 async function startSecondCamera() {
 	try {
 		const videoSource2 = videoSelect2.value;
-		const { composed } = await buildComposedStream(videoSource2);
+		if (videoSource2 === "none") {
+			if (localStream2) {
+				localStream2.getTracks().forEach(t => t.stop());
+				localStream2 = null;
+				liveVideoElement2.srcObject = null;
+			}
+			return;
+		}
+		if (videoSource2 === videoSelect.value) {
+			console.warn("Second camera uses the same device as the first. Skipping to avoid timeout.");
+			return;
+		}
+		const { composed } = await buildComposedStream(videoSource2, 1920, 1080);
 		localStream2 = composed;
 		liveVideoElement2.srcObject = localStream2;
 		await waitTrackLive(localStream2.getAudioTracks()[0]);
@@ -543,10 +592,10 @@ function deleteLastRecording() {
 	const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 	stream.getTracks().forEach((t) => t.stop())
 	const devices = await navigator.mediaDevices.enumerateDevices();
-	gotDevices(devices);
+	getDevices(devices);
 
-	startFirstCamera();
-	startSecondCamera();
+	await startFirstCamera();
+	await startSecondCamera();
 
 })();
 
