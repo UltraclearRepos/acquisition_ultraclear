@@ -214,8 +214,16 @@ def main():
 
     threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     
-    socketio.run(app, port=port, debug=False)
-
+    try:
+        socketio.run(app, port=port, debug=False)
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt received. Shutting down...")
+    finally:
+        if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
+            sensors.usg_scanner.stop()
+        if trackers.tracker and trackers.tracker.is_connected:
+            trackers.tracker.stop()
+        os._exit(0)
 
 if __name__ == '__main__':
     main()
