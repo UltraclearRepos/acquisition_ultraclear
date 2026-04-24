@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 ### Fixed
 
+## [0.3.0] - 2026-04-26
+### Added
+- Live resolution display for cameras
+- Enable recording only with 1 camera
+### Changed
+- Video format for cam1 from 1920x1080 to 640x360
+### Fixed
+- Timeout error when using two cameras at once
+- Closing terminal with tool not closing streams properly
+
 ## [0.2.0] - 2026-04-22
 ### Added
 - Usg scanner control
