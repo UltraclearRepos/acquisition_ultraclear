@@ -6,13 +6,14 @@ from .record import start_recording, stop_recording, kill_recording
 from .utils import build_filename
 
 dashboard = None
+move = None
 dobot_logger = None
     
 def safe_run_automation(socketio_instance, **kwargs):
     """
     Wrapper function to run the automation, handle any exception and proceed actions that is needed when automation stopped working
     """
-    global dashboard, dobot_logger
+    global dashboard, move, dobot_logger
     try:
         run_automation(**kwargs, socketio_instance=socketio_instance)
     except Exception as e:
@@ -26,7 +27,11 @@ def safe_run_automation(socketio_instance, **kwargs):
         kill_recording(socketio_instance)
         if dashboard:
             disable_robot(dashboard)
+            dashboard.close()
+        if move:
+            move.close()
         dashboard = None
+        move = None
 
 
 def run_automation(
@@ -44,7 +49,7 @@ def run_automation(
       - Iterates through the given number of loops,
       - Moves the robot through sequence of points and records audio+video.
     """
-    global dashboard, dobot_logger
+    global dashboard, move, dobot_logger
     print("Executing 'run_automation'")
 
     socketio_instance.emit("automation-status", {
@@ -120,7 +125,10 @@ def run_automation(
         print(f"Iteration {i+1} completed.")
 
     disable_robot(dashboard)
+    dashboard.close()
+    move.close()
     dashboard = None
+    move = None
     dobot_logger = None
     socketio_instance.emit("automation-status", {
         "status": "idle",

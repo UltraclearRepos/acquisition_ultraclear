@@ -368,6 +368,7 @@ input[type="range"] {
     border-radius: 6px;
     box-shadow: rgba(0, 0, 0, 0.08) 0 2px 4px;
     display: inline-flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     overflow: hidden;
@@ -438,4 +439,12 @@ input[type="range"] {
     width: 640px;
     height: auto;
     display: block;
+}
+
+.resolution-label {
+    text-align: center;
+    font-weight: bold;
+    margin-bottom: 5px;
+    font-size: 13px;
+    color: #333;
 }

@@ -10,7 +10,7 @@ class IMUTracker(threading.Thread):
 
         super().__init__(daemon=True)
 
-        self.port = 'COM3'
+        self.port = 'COM8'
         self.baudrate = 115200
         self.output_dir = 'tracker'
 
