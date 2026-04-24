@@ -31,6 +31,8 @@ const selectors = [audioInputSelect, videoSelect, videoSelect2];
 
 const liveVideoElement = document.getElementById('video');
 const liveVideoElement2 = document.getElementById('video2');
+const resVideo1El = document.getElementById("resVideo1");
+const resVideo2El = document.getElementById("resVideo2");
 
 liveVideoElement.controls = false;
 liveVideoElement2.controls = false;
@@ -276,7 +278,8 @@ function handleError(error) {
 }
 
 function waitTrackLive(track) {
-	if (track && track.readyState === 'live') {
+	if (!track) return Promise.resolve();
+	if (track.readyState === 'live') {
 		return Promise.resolve();
 	}
 	return new Promise(res => track.addEventListener('unmute', res, { once: true }));
@@ -351,14 +354,18 @@ async function startFirstCamera() {
 				localStream.getTracks().forEach(t => t.stop());
 				localStream = null;
 				liveVideoElement.srcObject = null;
+				resVideo1El.textContent = "";
 			}
 			return;
 		}
-		const { composed } = await buildComposedStream(videoSource, 640, 360);
+		const { composed, videoTrack } = await buildComposedStream(videoSource, 640, 360);
 		localStream = composed;
 		liveVideoElement.srcObject = localStream;
 		await waitTrackLive(localStream.getAudioTracks()[0]);
 		await waitVideoPlaying(liveVideoElement);
+
+		const settings = videoTrack.getSettings();
+		resVideo1El.textContent = `Cam 1: ${settings.width}x${settings.height}`;
 	} catch (e) {
 		handleError(e);
 	}
@@ -373,18 +380,23 @@ async function startSecondCamera() {
 				localStream2.getTracks().forEach(t => t.stop());
 				localStream2 = null;
 				liveVideoElement2.srcObject = null;
+				resVideo2El.textContent = "";
 			}
 			return;
 		}
 		if (videoSource2 === videoSelect.value) {
 			console.warn("Second camera uses the same device as the first. Skipping to avoid timeout.");
+			resVideo2El.textContent = "";
 			return;
 		}
-		const { composed } = await buildComposedStream(videoSource2, 1920, 1080);
+		const { composed, videoTrack } = await buildComposedStream(videoSource2, 1920, 1080);
 		localStream2 = composed;
 		liveVideoElement2.srcObject = localStream2;
 		await waitTrackLive(localStream2.getAudioTracks()[0]);
 		await waitVideoPlaying(liveVideoElement2);
+
+		const settings = videoTrack.getSettings();
+		resVideo2El.textContent = `Cam 2: ${settings.width}x${settings.height}`;
 	} catch (e) {
 		handleError(e);
 	}
