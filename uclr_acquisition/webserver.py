@@ -18,6 +18,7 @@ from uclr_acquisition import sensors, trackers
 from uclr_acquisition.config import config
 from uclr_acquisition.sensors.usg import USGScanner
 from uclr_acquisition.trackers.imu import IMUTracker
+from uclr_acquisition.runtime_config import runtime_config
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -109,6 +110,80 @@ def usg_toggle():
             
     return jsonify({"status": "ok"})
 
+@app.route('/device-toggle', methods=['POST'])
+def device_toggle():
+    print("Received device-toggle/POST request")
+    data = request.json
+    device = data.get("device")
+    enable = data.get("enable")
+    
+    if device == "usg":
+        if enable:
+            if not sensors.usg_scanner:
+                try:
+                    sensors.usg_scanner = USGScanner(config["usg_dll_path"])
+                    sensors.usg_scanner.connect()
+                    sensors.usg_scanner.start()
+                    runtime_config.set_value('usg_enabled', True)
+                    return jsonify({"status": "ok", "state": "on"})
+                except Exception as e:
+                    print(f"Failed to start USG: {e}")
+                    if sensors.usg_scanner:
+                        sensors.usg_scanner.stop()
+                        sensors.usg_scanner = None
+                    return jsonify({"status": "error", "message": str(e)}), 500
+            else:
+                runtime_config.set_value('usg_enabled', True)
+                return jsonify({"status": "ok", "state": "on"})
+        else:
+            if sensors.usg_scanner:
+                if sensors.usg_scanner.is_initialized:
+                    sensors.usg_scanner.stop()
+                sensors.usg_scanner = None
+            runtime_config.set_value('usg_enabled', False)
+            return jsonify({"status": "ok", "state": "off"})
+            
+    elif device == "imu":
+        if enable:
+            if not trackers.tracker:
+                try:
+                    trackers.tracker = IMUTracker()
+                    trackers.tracker.connect()
+                    trackers.tracker.start()
+                    runtime_config.set_value('imu_enabled', True)
+                    return jsonify({"status": "ok", "state": "on"})
+                except Exception as e:
+                    print(f"Failed to start IMU Tracker: {e}")
+                    if trackers.tracker:
+                        trackers.tracker = None
+                    return jsonify({"status": "error", "message": str(e)}), 500
+            else:
+                runtime_config.set_value('imu_enabled', True)
+                return jsonify({"status": "ok", "state": "on"})
+        else:
+            if trackers.tracker:
+                if trackers.tracker.is_connected:
+                    trackers.tracker.stop()
+                trackers.tracker = None
+            runtime_config.set_value('imu_enabled', False)
+            return jsonify({"status": "ok", "state": "off"})
+            
+    return jsonify({"status": "error", "message": "Unknown device"}), 400
+
+@app.route('/device-status', methods=['GET'])
+def device_status():
+    status = {
+        "usg": {
+            "enabled": runtime_config['usg_enabled'],
+            "initialized": bool(sensors.usg_scanner and sensors.usg_scanner.init_success)
+        },
+        "imu": {
+            "enabled": runtime_config['imu_enabled'],
+            "initialized": bool(trackers.tracker and trackers.tracker.is_connected)
+        }
+    }
+    return jsonify(status)
+
 @app.route("/config", methods=['GET'])
 def api_config():
     print("Received config/GET request")
@@ -196,18 +271,6 @@ def main():
 
     if args.setup:
         config.load_from_json(args.setup)
-
-    try:
-        sensors.usg_scanner = USGScanner(config["usg_dll_path"])
-        sensors.usg_scanner.start()
-    except Exception as e:
-        print(f"Failed to start USG: {e}")
-
-    try:
-        trackers.tracker = IMUTracker()
-        trackers.tracker.start()
-    except Exception as e:
-        print(f"Failed to start IMU Tracker: {e}")
 
     port = args.port
     url = "http://127.0.0.1:{0}".format(port)

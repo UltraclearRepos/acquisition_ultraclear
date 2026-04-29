@@ -41,10 +41,8 @@ class IMUTracker(threading.Thread):
 
     def run(self):
 
-        try:
-            self.connect()
-        except Exception as e:
-            print(f"IMU thread exiting - connection failed: {e}")
+        if not self.is_connected:
+            print("IMU not connected.")
             return
 
         while self.running:

@@ -57,6 +57,12 @@ const toggleUsgBtn = document.getElementById("toggleUsgBtn");
 
 let isUsgOn = false;
 
+const deviceUSG = document.getElementById("deviceUSG");
+const deviceIMU = document.getElementById("deviceIMU");
+const deviceUSGStatus = document.getElementById("deviceUSGStatus");
+const deviceIMUStatus = document.getElementById("deviceIMUStatus");
+const usgStream = document.getElementById("usgStream");
+
 const DEFAULT_CONFIG = {
 	speeds: ["slow", "medium", "fast"]
 };
@@ -595,6 +601,40 @@ function deleteLastRecording() {
 		});
 }
 
+function updateDeviceStatus(element, status) {
+	element.className = `device-status ${status}`;
+}
+
+function handleDeviceToggle(device, checkbox, statusElement) {
+	const enable = checkbox.checked;
+	checkbox.disabled = true;
+	updateDeviceStatus(statusElement, 'loading');
+
+	fetch("/device-toggle", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ device: device, enable: enable })
+	})
+		.then(res => res.json())
+		.then(data => {
+			if (data.status === "ok") {
+				updateDeviceStatus(statusElement, data.state);
+			} else {
+				alert("Error toggling device: " + data.message);
+				checkbox.checked = !enable; // revert
+				updateDeviceStatus(statusElement, 'error');
+			}
+		})
+		.catch(err => {
+			console.error("Error toggling device:", err);
+			checkbox.checked = !enable; // revert
+			updateDeviceStatus(statusElement, 'error');
+		})
+		.finally(() => {
+			checkbox.disabled = false;
+		});
+}
+
 (async function init() {
 
 	const cfg = await loadConfig();
@@ -608,6 +648,21 @@ function deleteLastRecording() {
 
 	await startFirstCamera();
 	await startSecondCamera();
+
+	// Fetch device status and update UI
+	fetch("/device-status")
+		.then(res => res.json())
+		.then(data => {
+			if (data.usg) {
+				deviceUSG.checked = data.usg.enabled;
+				updateDeviceStatus(deviceUSGStatus, data.usg.enabled ? (data.usg.initialized ? 'on' : 'error') : 'off');
+			}
+			if (data.imu) {
+				deviceIMU.checked = data.imu.enabled;
+				updateDeviceStatus(deviceIMUStatus, data.imu.enabled ? (data.imu.initialized ? 'on' : 'error') : 'off');
+			}
+		})
+		.catch(err => console.error("Error fetching device status:", err));
 
 })();
 
@@ -631,28 +686,43 @@ speedSlider.addEventListener("input", (e) => {
 	speedValueEl.textContent = e.target.value;
 })
 addPointBtn.addEventListener("click", addPointRow);
+deviceUSG.addEventListener("change", () => handleDeviceToggle("usg", deviceUSG, deviceUSGStatus));
+deviceIMU.addEventListener("change", () => handleDeviceToggle("imu", deviceIMU, deviceIMUStatus));
 
-if (toggleUsgBtn) {
-	toggleUsgBtn.addEventListener("click", () => {
-		isUsgOn = !isUsgOn;
-		const action = isUsgOn ? "turn_on" : "turn_off";
-		toggleUsgBtn.disabled = true;
-		fetch("/usg-toggle", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ action: action })
-		}).then(res => res.json()).then(data => {
-			if (data.status === "ok") {
-				toggleUsgBtn.textContent = isUsgOn ? "Stop USG preview" : "Start USG preview";
-			} else {
-				isUsgOn = !isUsgOn;
-				alert(data.message);
+
+toggleUsgBtn.addEventListener("click", () => {
+	if (!deviceUSG.checked) {
+		alert("USG Scanner is not enabled. Please enable it first.");
+		return;
+	}
+	isUsgOn = !isUsgOn;
+	const action = isUsgOn ? "turn_on" : "turn_off";
+	toggleUsgBtn.disabled = true;
+	fetch("/usg-toggle", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ action: action })
+	}).then(res => res.json()).then(data => {
+		if (data.status === "ok") {
+			toggleUsgBtn.textContent = isUsgOn ? "Stop USG preview" : "Start USG preview";
+			if (usgStream) {
+				if (isUsgOn) {
+					// Append timestamp to avoid caching
+					usgStream.src = "/usg_feed?" + new Date().getTime();
+					usgStream.style.display = "block";
+				} else {
+					usgStream.src = "";
+					usgStream.style.display = "none";
+				}
 			}
-		}).finally(() => {
-			toggleUsgBtn.disabled = false;
-		});
+		} else {
+			isUsgOn = !isUsgOn;
+			alert(data.message);
+		}
+	}).finally(() => {
+		toggleUsgBtn.disabled = false;
 	});
-}
+});
 
 //browser ID
 function getBrowser() {

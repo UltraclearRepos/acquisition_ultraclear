@@ -1,5 +1,6 @@
 from .config import config
 from uclr_acquisition import sensors, trackers
+from uclr_acquisition.runtime_config import runtime_config
 import time
 import os
 
@@ -9,13 +10,19 @@ def start_recording(output_filename_prefix, socketio_instance):
     global filename_prefix
 
     unavailable = []
-    if not sensors.usg_scanner or not sensors.usg_scanner.is_initialized:
-        unavailable.append("USG")
-    if not trackers.tracker or not trackers.tracker.is_connected:
-        unavailable.append("Tracker")
+    
+    # Check USG if enabled
+    if runtime_config['usg_enabled']:
+        if not sensors.usg_scanner or not sensors.usg_scanner.is_initialized:
+            unavailable.append("USG")
+            
+    # Check IMU if enabled
+    if runtime_config['imu_enabled']:
+        if not trackers.tracker or not trackers.tracker.is_connected:
+            unavailable.append("Tracker")
 
     if unavailable:
-        msg = ", ".join(unavailable) + " not available"
+        msg = ", ".join(unavailable) + " enabled but not initialized/connected"
         print(f"Recording blocked: {msg}")
         return False, msg
 
@@ -28,8 +35,11 @@ def start_recording(output_filename_prefix, socketio_instance):
         "filename": video_filename
     })
 
-    sensors.usg_scanner.start_recording()
-    trackers.tracker.start_recording()
+    if runtime_config['usg_enabled'] and sensors.usg_scanner:
+        sensors.usg_scanner.start_recording()
+    
+    if runtime_config['imu_enabled'] and trackers.tracker:
+        trackers.tracker.start_recording()
 
     return True, None
 
