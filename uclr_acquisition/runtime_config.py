@@ -1,7 +1,7 @@
 class RuntimeConfig:
     _DEFAULT_CONFIG = {
         'usg_enabled': False,
-        'imu_enabled': False,
+        'active_tracker': 'none',
     }
 
     def __init__(self):

@@ -33,9 +33,13 @@
                                 <span id="deviceUSGStatus" class="device-status"></span>
                             </div>
                             <div class="device-row">
-                                <input type="checkbox" id="deviceIMU" />
-                                <label for="deviceIMU">IMU Tracker</label>
-                                <span id="deviceIMUStatus" class="device-status"></span>
+                                <label for="trackerSelect" style="margin-left: 0;">Active Tracker</label>
+                                <select id="trackerSelect" style="flex-grow: 1; margin-left: 10px;">
+                                    <option value="none">None</option>
+                                    <option value="imu">IMU Tracker</option>
+                                    <option value="psmove">PSMove Tracker</option>
+                                </select>
+                                <span id="deviceTrackerStatus" class="device-status"></span>
                             </div>
                         </div>
                         <div class="form-group">

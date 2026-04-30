@@ -18,6 +18,7 @@ from uclr_acquisition import sensors, trackers
 from uclr_acquisition.config import config
 from uclr_acquisition.sensors.usg import USGScanner
 from uclr_acquisition.trackers.imu import IMUTracker
+from uclr_acquisition.trackers.psmove import PSMoveTracker
 from uclr_acquisition.runtime_config import runtime_config
 
 
@@ -110,65 +111,71 @@ def usg_toggle():
             
     return jsonify({"status": "ok"})
 
-@app.route('/device-toggle', methods=['POST'])
-def device_toggle():
-    print("Received device-toggle/POST request")
+@app.route('/device-usg-toggle', methods=['POST'])
+def device_usg_toggle():
+    print("Received device-usg-toggle/POST request")
     data = request.json
-    device = data.get("device")
     enable = data.get("enable")
     
-    if device == "usg":
-        if enable:
-            if not sensors.usg_scanner:
-                try:
-                    sensors.usg_scanner = USGScanner(config["usg_dll_path"])
-                    sensors.usg_scanner.connect()
-                    sensors.usg_scanner.start()
-                    runtime_config.set_value('usg_enabled', True)
-                    return jsonify({"status": "ok", "state": "on"})
-                except Exception as e:
-                    print(f"Failed to start USG: {e}")
-                    if sensors.usg_scanner:
-                        sensors.usg_scanner.stop()
-                        sensors.usg_scanner = None
-                    return jsonify({"status": "error", "message": str(e)}), 500
-            else:
+    if enable:
+        if not sensors.usg_scanner:
+            try:
+                sensors.usg_scanner = USGScanner(config["usg_dll_path"])
+                sensors.usg_scanner.connect()
+                sensors.usg_scanner.start()
                 runtime_config.set_value('usg_enabled', True)
                 return jsonify({"status": "ok", "state": "on"})
-        else:
-            if sensors.usg_scanner:
-                if sensors.usg_scanner.is_initialized:
+            except Exception as e:
+                print(f"Failed to start USG: {e}")
+                if sensors.usg_scanner:
                     sensors.usg_scanner.stop()
-                sensors.usg_scanner = None
-            runtime_config.set_value('usg_enabled', False)
-            return jsonify({"status": "ok", "state": "off"})
-            
-    elif device == "imu":
-        if enable:
-            if not trackers.tracker:
-                try:
-                    trackers.tracker = IMUTracker()
-                    trackers.tracker.connect()
-                    trackers.tracker.start()
-                    runtime_config.set_value('imu_enabled', True)
-                    return jsonify({"status": "ok", "state": "on"})
-                except Exception as e:
-                    print(f"Failed to start IMU Tracker: {e}")
-                    if trackers.tracker:
-                        trackers.tracker = None
-                    return jsonify({"status": "error", "message": str(e)}), 500
-            else:
-                runtime_config.set_value('imu_enabled', True)
-                return jsonify({"status": "ok", "state": "on"})
+                    sensors.usg_scanner = None
+                return jsonify({"status": "error", "message": str(e)}), 500
         else:
-            if trackers.tracker:
-                if trackers.tracker.is_connected:
-                    trackers.tracker.stop()
-                trackers.tracker = None
-            runtime_config.set_value('imu_enabled', False)
-            return jsonify({"status": "ok", "state": "off"})
+            runtime_config.set_value('usg_enabled', True)
+            return jsonify({"status": "ok", "state": "on"})
+    else:
+        if sensors.usg_scanner:
+            if sensors.usg_scanner.is_initialized:
+                sensors.usg_scanner.stop()
+            sensors.usg_scanner = None
+        runtime_config.set_value('usg_enabled', False)
+        return jsonify({"status": "ok", "state": "off"})
+
+@app.route('/device-tracker-toggle', methods=['POST'])
+def device_tracker_toggle():
+    print("Received device-tracker-toggle/POST request")
+    data = request.json
+    tracker_type = data.get("tracker") # "none", "imu", "psmove"
+    
+    # Always stop current tracker if it's changing
+    if trackers.tracker:
+        if getattr(trackers.tracker, 'is_connected', False):
+            trackers.tracker.stop()
+        trackers.tracker = None
+        
+    if tracker_type in ["none", "", None]:
+        runtime_config.set_value('active_tracker', 'none')
+        return jsonify({"status": "ok", "state": "none"})
+        
+    try:
+        if tracker_type == "imu":
+            trackers.tracker = IMUTracker()
+        elif tracker_type == "psmove":
+            trackers.tracker = PSMoveTracker(config["psmove_dll_path"])
+        else:
+            return jsonify({"status": "error", "message": f"Unknown tracker type: {tracker_type}"}), 400
             
-    return jsonify({"status": "error", "message": "Unknown device"}), 400
+        trackers.tracker.connect()
+        trackers.tracker.start()
+        runtime_config.set_value('active_tracker', tracker_type)
+        return jsonify({"status": "ok", "state": tracker_type})
+    except Exception as e:
+        print(f"Failed to start {tracker_type} Tracker: {e}")
+        if trackers.tracker:
+            trackers.tracker = None
+        runtime_config.set_value('active_tracker', 'none')
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/device-status', methods=['GET'])
 def device_status():
@@ -177,8 +184,8 @@ def device_status():
             "enabled": runtime_config['usg_enabled'],
             "initialized": bool(sensors.usg_scanner and sensors.usg_scanner.init_success)
         },
-        "imu": {
-            "enabled": runtime_config['imu_enabled'],
+        "tracker": {
+            "active": runtime_config['active_tracker'],
             "initialized": bool(trackers.tracker and trackers.tracker.is_connected)
         }
     }

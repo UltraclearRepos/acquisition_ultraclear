@@ -16,10 +16,11 @@ def start_recording(output_filename_prefix, socketio_instance):
         if not sensors.usg_scanner or not sensors.usg_scanner.is_initialized:
             unavailable.append("USG")
             
-    # Check IMU if enabled
-    if runtime_config['imu_enabled']:
+    # Check Tracker if enabled
+    active_tracker = runtime_config['active_tracker']
+    if active_tracker != 'none':
         if not trackers.tracker or not trackers.tracker.is_connected:
-            unavailable.append("Tracker")
+            unavailable.append(f"{active_tracker.upper()} Tracker")
 
     if unavailable:
         msg = ", ".join(unavailable) + " enabled but not initialized/connected"
@@ -38,7 +39,7 @@ def start_recording(output_filename_prefix, socketio_instance):
     if runtime_config['usg_enabled'] and sensors.usg_scanner:
         sensors.usg_scanner.start_recording()
     
-    if runtime_config['imu_enabled'] and trackers.tracker:
+    if runtime_config['active_tracker'] != 'none' and trackers.tracker:
         trackers.tracker.start_recording()
 
     return True, None
