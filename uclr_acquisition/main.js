@@ -58,9 +58,11 @@ const toggleUsgBtn = document.getElementById("toggleUsgBtn");
 let isUsgOn = false;
 
 const deviceUSG = document.getElementById("deviceUSG");
-const trackerSelect = document.getElementById("trackerSelect");
+const trackerIMU = document.getElementById("trackerIMU");
+const trackerPSMove = document.getElementById("trackerPSMove");
 const deviceUSGStatus = document.getElementById("deviceUSGStatus");
-const deviceTrackerStatus = document.getElementById("deviceTrackerStatus");
+const trackerIMUStatus = document.getElementById("trackerIMUStatus");
+const trackerPSMoveStatus = document.getElementById("trackerPSMoveStatus");
 const usgStream = document.getElementById("usgStream");
 
 const DEFAULT_CONFIG = {
@@ -635,33 +637,33 @@ function handleUsgToggle(checkbox, statusElement) {
 		});
 }
 
-function handleTrackerToggle(selectElement, statusElement) {
-	const selectedTracker = selectElement.value;
-	selectElement.disabled = true;
+function handleTrackerToggle(trackerName, checkbox, statusElement) {
+	const enable = checkbox.checked;
+	checkbox.disabled = true;
 	updateDeviceStatus(statusElement, 'loading');
 
 	fetch("/device-tracker-toggle", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ tracker: selectedTracker })
+		body: JSON.stringify({ tracker: trackerName, enable: enable })
 	})
 		.then(res => res.json())
 		.then(data => {
 			if (data.status === "ok") {
-				updateDeviceStatus(statusElement, data.state === "none" ? "off" : "on");
+				updateDeviceStatus(statusElement, data.state);
 			} else {
 				alert("Error toggling Tracker: " + data.message);
-				selectElement.value = "none"; // revert to none on error
+				checkbox.checked = !enable; // revert
 				updateDeviceStatus(statusElement, 'error');
 			}
 		})
 		.catch(err => {
 			console.error("Error toggling Tracker:", err);
-			selectElement.value = "none"; // revert
+			checkbox.checked = !enable; // revert
 			updateDeviceStatus(statusElement, 'error');
 		})
 		.finally(() => {
-			selectElement.disabled = false;
+			checkbox.disabled = false;
 		});
 }
 
@@ -687,9 +689,13 @@ function handleTrackerToggle(selectElement, statusElement) {
 				deviceUSG.checked = data.usg.enabled;
 				updateDeviceStatus(deviceUSGStatus, data.usg.enabled ? (data.usg.initialized ? 'on' : 'error') : 'off');
 			}
-			if (data.tracker) {
-				trackerSelect.value = data.tracker.active;
-				updateDeviceStatus(deviceTrackerStatus, data.tracker.active !== 'none' ? (data.tracker.initialized ? 'on' : 'error') : 'off');
+			if (data.tracker_imu) {
+				trackerIMU.checked = data.tracker_imu.enabled;
+				updateDeviceStatus(trackerIMUStatus, data.tracker_imu.enabled ? (data.tracker_imu.initialized ? 'on' : 'error') : 'off');
+			}
+			if (data.tracker_psmove) {
+				trackerPSMove.checked = data.tracker_psmove.enabled;
+				updateDeviceStatus(trackerPSMoveStatus, data.tracker_psmove.enabled ? (data.tracker_psmove.initialized ? 'on' : 'error') : 'off');
 			}
 		})
 		.catch(err => console.error("Error fetching device status:", err));
@@ -717,7 +723,8 @@ speedSlider.addEventListener("input", (e) => {
 })
 addPointBtn.addEventListener("click", addPointRow);
 deviceUSG.addEventListener("change", () => handleUsgToggle(deviceUSG, deviceUSGStatus));
-trackerSelect.addEventListener("change", () => handleTrackerToggle(trackerSelect, deviceTrackerStatus));
+trackerIMU.addEventListener("change", () => handleTrackerToggle("imu", trackerIMU, trackerIMUStatus));
+trackerPSMove.addEventListener("change", () => handleTrackerToggle("psmove", trackerPSMove, trackerPSMoveStatus));
 
 
 toggleUsgBtn.addEventListener("click", () => {

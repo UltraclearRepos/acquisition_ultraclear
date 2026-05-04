@@ -8,12 +8,12 @@ class PSMVector3f(ctypes.Structure):
     _fields_ = [("x", ctypes.c_float), ("y", ctypes.c_float), ("z", ctypes.c_float)]
 
 class PSMoveTracker(threading.Thread):
-    def __init__(self, dll_path, controller_id=1):
+    def __init__(self, dll_path, controller_id=0):
         super().__init__(daemon=True)
         self.dll_path = dll_path
         self.controller_id = controller_id
         
-        self.output_dir = 'tracker'
+        self.output_dir = 'psmove'
         os.makedirs(self.output_dir, exist_ok=True)
         
         self.running = True
