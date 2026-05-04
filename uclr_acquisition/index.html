@@ -25,6 +25,23 @@
             <aside class="sidebar">
                 <div class="form-section">
                     <div class="form-grid">
+                        <div class="form-group devices-section">
+                            <label>Devices</label>
+                            <div class="device-row">
+                                <input type="checkbox" id="deviceUSG" />
+                                <label for="deviceUSG">USG Scanner</label>
+                                <span id="deviceUSGStatus" class="device-status"></span>
+                            </div>
+                            <div class="device-row">
+                                <label for="trackerSelect" style="margin-left: 0;">Active Tracker</label>
+                                <select id="trackerSelect" style="flex-grow: 1; margin-left: 10px;">
+                                    <option value="none">None</option>
+                                    <option value="imu">IMU Tracker</option>
+                                    <option value="psmove">PSMove Tracker</option>
+                                </select>
+                                <span id="deviceTrackerStatus" class="device-status"></span>
+                            </div>
+                        </div>
                         <div class="form-group">
                             <label for="audioSource">Camera audio input source</label>
                             <select id="audioSource"></select>
@@ -120,8 +137,8 @@
                     </div>
                     <div class="video">
                         <div class="resolution-label">USG Preview</div>
-                        <img id="usgStream" src="/usg_feed" alt="Live USG Preview"
-                            onerror="this.style.display='none'" />
+                        <img id="usgStream" src="" alt="Live USG Preview"
+                            style="display:none;" onerror="this.style.display='none'" />
                     </div>
                 </div>
 

@@ -27,6 +27,7 @@ class USGScanner(threading.Thread):
         self.is_frozen = True
         self.target_frozen = True
         self.was_frozen = True
+        self.init_success = False
 
         try:
             self.lib = ctypes.CDLL(self.dll_path)
@@ -55,22 +56,32 @@ class USGScanner(threading.Thread):
             self.BufType = c_uint32 * self.buf_len
             self.p_array = self.BufType()
 
-    def run(self):
+    def connect(self):
         if not self.is_initialized:
-            print("Ultrasound could not be started. DLL not loaded.")
-            return
+            raise Exception("USG DLL not loaded.")
 
         self.lib.on_init()
-        if self.lib.init_ultrasound_usgfw2() == 2: return
-        if self.lib.find_connected_probe() != 101: return
-        if self.lib.data_view_function() < 0: return
-        if self.lib.mixer_control_function(0, 0, self.w, self.h, 0, 0, 0) < 0: return
+        if self.lib.init_ultrasound_usgfw2() == 2:
+            raise Exception("Failed to initialize USG framework.")
+        if self.lib.find_connected_probe() != 101:
+            raise Exception("USG probe not connected.")
+        if self.lib.data_view_function() < 0:
+            raise Exception("USG data view function failed.")
+        if self.lib.mixer_control_function(0, 0, self.w, self.h, 0, 0, 0) < 0:
+            raise Exception("USG mixer control failed.")
+            
         # Initializing the buffer sequence by running and freezing once physically
         self.lib.Run_ultrasound_scanning()
         time.sleep(0.2)
         self.lib.Freeze_ultrasound_scanning()
 
         print("Ultrasound initialized in frozen state.")
+        self.init_success = True
+
+    def run(self):
+        if not self.init_success:
+            print("Ultrasound thread exiting - not connected.")
+            return
 
         while self.running:
             if self.target_frozen != self.is_frozen:
