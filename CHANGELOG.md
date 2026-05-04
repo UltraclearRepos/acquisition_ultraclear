@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 ### Fixed
 
+## [0.4.0] - 2026-05-04
+### Added
+- PSMove tracker
+- Selecting tracker to use
+
 ## [0.3.0] - 2026-04-26
 ### Added
 - Live resolution display for cameras
