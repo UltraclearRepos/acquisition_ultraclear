@@ -6,13 +6,13 @@ import csv
 
 
 class IMUTracker(threading.Thread):
-    def __init__(self):
+    def __init__(self, port):
 
         super().__init__(daemon=True)
 
-        self.port = 'COM8'
+        self.port = port
         self.baudrate = 115200
-        self.output_dir = 'tracker'
+        self.output_dir = 'imu'
 
         self.ser = None
         self.running = True

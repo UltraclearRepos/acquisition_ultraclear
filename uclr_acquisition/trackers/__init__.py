@@ -1,6 +1,6 @@
 from .imu import IMUTracker
 from .psmove import PSMoveTracker
 
-tracker = None
+active_trackers = {}
 
-__all__ = ['tracker', 'IMUTracker', 'PSMoveTracker']
+__all__ = ['active_trackers', 'IMUTracker', 'PSMoveTracker']

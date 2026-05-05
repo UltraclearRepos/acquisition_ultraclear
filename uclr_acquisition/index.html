@@ -33,22 +33,22 @@
                                 <span id="deviceUSGStatus" class="device-status"></span>
                             </div>
                             <div class="device-row">
-                                <label for="trackerSelect" style="margin-left: 0;">Active Tracker</label>
-                                <select id="trackerSelect" style="flex-grow: 1; margin-left: 10px;">
-                                    <option value="none">None</option>
-                                    <option value="imu">IMU Tracker</option>
-                                    <option value="psmove">PSMove Tracker</option>
-                                </select>
-                                <span id="deviceTrackerStatus" class="device-status"></span>
+                                <label style="margin-left: 0; margin-bottom: 8px;">Trackers</label>
+                            </div>
+                            <div class="device-row">
+                                <input type="checkbox" id="trackerIMU" />
+                                <label for="trackerIMU">IMU Tracker</label>
+                                <span id="trackerIMUStatus" class="device-status"></span>
+                            </div>
+                            <div class="device-row">
+                                <input type="checkbox" id="trackerPSMove" />
+                                <label for="trackerPSMove">PSMove Tracker</label>
+                                <span id="trackerPSMoveStatus" class="device-status"></span>
                             </div>
                         </div>
                         <div class="form-group">
                             <label for="audioSource">Camera audio input source</label>
                             <select id="audioSource"></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="microOutput">Microphone output device</label>
-                            <select id="microOutput"></select>
                         </div>
                         <div class="form-group">
                             <label for="videoSource">Video source</label>
@@ -135,10 +135,12 @@
                         <div id="resVideo2" class="resolution-label"></div>
                         <video id="video2" controls autoplay playsinline muted></video>
                     </div>
+                </div>
+                <div class="video-row">
                     <div class="video">
                         <div class="resolution-label">USG Preview</div>
-                        <img id="usgStream" src="" alt="Live USG Preview"
-                            style="display:none;" onerror="this.style.display='none'" />
+                        <img id="usgStream" src="" alt="Live USG Preview" style="display:none;"
+                            onerror="this.style.display='none'" />
                     </div>
                 </div>
 

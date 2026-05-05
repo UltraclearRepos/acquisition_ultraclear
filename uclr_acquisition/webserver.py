@@ -146,36 +146,44 @@ def device_usg_toggle():
 def device_tracker_toggle():
     print("Received device-tracker-toggle/POST request")
     data = request.json
-    tracker_type = data.get("tracker") # "none", "imu", "psmove"
+    tracker_type = data.get("tracker") # "imu" or "psmove"
+    enable = data.get("enable")
     
-    # Always stop current tracker if it's changing
-    if trackers.tracker:
-        if getattr(trackers.tracker, 'is_connected', False):
-            trackers.tracker.stop()
-        trackers.tracker = None
-        
-    if tracker_type in ["none", "", None]:
-        runtime_config.set_value('active_tracker', 'none')
-        return jsonify({"status": "ok", "state": "none"})
-        
-    try:
-        if tracker_type == "imu":
-            trackers.tracker = IMUTracker()
-        elif tracker_type == "psmove":
-            trackers.tracker = PSMoveTracker(config["psmove_dll_path"])
+    if enable:
+        if tracker_type not in trackers.active_trackers:
+            try:
+                if tracker_type == "imu":
+                    new_tracker = IMUTracker(config["imu_port"])
+                elif tracker_type == "psmove":
+                    new_tracker = PSMoveTracker(config["psmove_dll_path"])
+                else:
+                    return jsonify({"status": "error", "message": f"Unknown tracker type: {tracker_type}"}), 400
+                    
+                new_tracker.connect()
+                new_tracker.start()
+                trackers.active_trackers[tracker_type] = new_tracker
+                
+                if tracker_type not in runtime_config['active_trackers']:
+                    runtime_config['active_trackers'].append(tracker_type)
+                    
+                return jsonify({"status": "ok", "state": "on"})
+            except Exception as e:
+                print(f"Failed to start {tracker_type} Tracker: {e}")
+                return jsonify({"status": "error", "message": str(e)}), 500
         else:
-            return jsonify({"status": "error", "message": f"Unknown tracker type: {tracker_type}"}), 400
+            if tracker_type not in runtime_config['active_trackers']:
+                runtime_config['active_trackers'].append(tracker_type)
+            return jsonify({"status": "ok", "state": "on"})
+    else:
+        if tracker_type in trackers.active_trackers:
+            tracker_inst = trackers.active_trackers.pop(tracker_type)
+            if getattr(tracker_inst, 'is_connected', False) or getattr(tracker_inst, 'running', False):
+                tracker_inst.stop()
+                
+        if tracker_type in runtime_config['active_trackers']:
+            runtime_config['active_trackers'].remove(tracker_type)
             
-        trackers.tracker.connect()
-        trackers.tracker.start()
-        runtime_config.set_value('active_tracker', tracker_type)
-        return jsonify({"status": "ok", "state": tracker_type})
-    except Exception as e:
-        print(f"Failed to start {tracker_type} Tracker: {e}")
-        if trackers.tracker:
-            trackers.tracker = None
-        runtime_config.set_value('active_tracker', 'none')
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "ok", "state": "off"})
 
 @app.route('/device-status', methods=['GET'])
 def device_status():
@@ -184,9 +192,13 @@ def device_status():
             "enabled": runtime_config['usg_enabled'],
             "initialized": bool(sensors.usg_scanner and sensors.usg_scanner.init_success)
         },
-        "tracker": {
-            "active": runtime_config['active_tracker'],
-            "initialized": bool(trackers.tracker and trackers.tracker.is_connected)
+        "tracker_imu": {
+            "enabled": "imu" in runtime_config['active_trackers'],
+            "initialized": "imu" in trackers.active_trackers and getattr(trackers.active_trackers["imu"], 'is_connected', False)
+        },
+        "tracker_psmove": {
+            "enabled": "psmove" in runtime_config['active_trackers'],
+            "initialized": "psmove" in trackers.active_trackers and getattr(trackers.active_trackers["psmove"], 'is_connected', False)
         }
     }
     return jsonify(status)
@@ -291,8 +303,9 @@ def main():
     finally:
         if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
             sensors.usg_scanner.stop()
-        if trackers.tracker and trackers.tracker.is_connected:
-            trackers.tracker.stop()
+        for t in trackers.active_trackers.values():
+            if getattr(t, 'is_connected', False) or getattr(t, 'running', False):
+                t.stop()
         os._exit(0)
 
 if __name__ == '__main__':
