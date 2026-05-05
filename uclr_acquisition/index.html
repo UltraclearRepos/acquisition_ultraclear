@@ -32,7 +32,8 @@
                                 <label for="deviceUSG">USG Scanner</label>
                                 <span id="deviceUSGStatus" class="device-status"></span>
                             </div>
-                                <label>Trackers</label>
+                            <div class="device-row">
+                                <label style="margin-left: 0; margin-bottom: 8px;">Trackers</label>
                             </div>
                             <div class="device-row">
                                 <input type="checkbox" id="trackerIMU" />
@@ -48,10 +49,6 @@
                         <div class="form-group">
                             <label for="audioSource">Camera audio input source</label>
                             <select id="audioSource"></select>
-                        </div>
-                        <div class="form-group">
-                            <label for="microOutput">Microphone output device</label>
-                            <select id="microOutput"></select>
                         </div>
                         <div class="form-group">
                             <label for="videoSource">Video source</label>
@@ -142,8 +139,8 @@
                 <div class="video-row">
                     <div class="video">
                         <div class="resolution-label">USG Preview</div>
-                        <img id="usgStream" src="" alt="Live USG Preview"
-                            style="display:none;" onerror="this.style.display='none'" />
+                        <img id="usgStream" src="" alt="Live USG Preview" style="display:none;"
+                            onerror="this.style.display='none'" />
                     </div>
                 </div>
 
