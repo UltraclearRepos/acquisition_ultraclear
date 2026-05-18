@@ -46,21 +46,26 @@ class IMUTracker(threading.Thread):
             return
 
         while self.running:
-            if self.ser.in_waiting > 0:
-                try:
-                    line_bytes = self.ser.readline()
-                    if self.is_recording:
+            try:
+                if self.ser.in_waiting > 0:
+                    last_line_byte = None
+
+                    while self.ser.in_waiting > 0:
+                        last_line_byte = self.ser.readline()
+                    line_bytes = last_line_byte
+
+                    if self.is_recording and line_bytes:
                         recv_time = time.time()
 
                         line_str = line_bytes.decode('utf-8', errors='ignore').strip()
                         if line_str:
                             self.data_buffer.append((recv_time, line_str))
-                except Exception as e:
-                    print(f"IMU reading failed: {e}")
 
-                time.sleep(0.05)
-            else:
-                time.sleep(0.05)
+                else:
+                    time.sleep(0.001)
+
+            except Exception as e:
+                print(f"IMU reading failed: {e}")
 
         if self.ser and self.ser.is_open:
             self.ser.close()
