@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 ### Fixed
 
+## [0.4.2] - 2026-05-19
+### Fixed
+- Fix collecting data from IMU buffer
+
 ## [0.4.1] - 2025-05-05
 ### Changed
 - Enable recording with multiple trackers
