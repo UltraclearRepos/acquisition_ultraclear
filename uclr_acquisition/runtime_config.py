@@ -2,6 +2,8 @@ class RuntimeConfig:
     _DEFAULT_CONFIG = {
         'usg_enabled': False,
         'active_trackers': [],
+        'mems_enabled': False,
+        'sync_output': None,
     }
 
     def __init__(self):

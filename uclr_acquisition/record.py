@@ -21,6 +21,10 @@ def start_recording(output_filename_prefix, socketio_instance):
         if t_type not in trackers.active_trackers or not getattr(trackers.active_trackers[t_type], 'is_connected', False):
             unavailable.append(f"{t_type.upper()} Tracker")
 
+    if runtime_config['mems_enabled']:
+        if not sensors.mems_microphone or not sensors.mems_microphone.is_connected:
+            unavailable.append("Raspberry Pi MEMS microphone")
+
     if unavailable:
         msg = ", ".join(unavailable) + " enabled but not initialized/connected"
         print(f"Recording blocked: {msg}")
@@ -35,6 +39,20 @@ def start_recording(output_filename_prefix, socketio_instance):
         "filename": video_filename
     })
 
+    if runtime_config['mems_enabled']:
+        try:
+            sensors.mems_microphone.start_recording(
+                f"{output_filename_prefix}.wav"
+            )
+        except Exception as exc:
+            print(f"Failed to start MEMS recording: {exc}")
+            socketio_instance.emit("record", {
+                "action": "stop",
+                "shouldUpload": False
+            })
+            filename_prefix = None
+            return False, str(exc)
+
     if runtime_config['usg_enabled'] and sensors.usg_scanner:
         sensors.usg_scanner.start_recording()
     
@@ -46,7 +64,22 @@ def start_recording(output_filename_prefix, socketio_instance):
 
 def stop_recording(socketio_instance):
     global filename_prefix
-    
+
+    mems_error = None
+    if runtime_config['mems_enabled']:
+        if not sensors.mems_microphone or not sensors.mems_microphone.is_connected:
+            mems_error = (
+                "Raspberry Pi MEMS microphone connection was lost "
+                "during recording."
+            )
+            print(mems_error)
+        else:
+            try:
+                sensors.mems_microphone.stop_capture()
+            except Exception as exc:
+                mems_error = str(exc)
+                print(f"Failed to stop MEMS recording: {exc}")
+
     if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
         os.makedirs("usg", exist_ok=True)
         os.makedirs("usg_timestamps", exist_ok=True)
@@ -63,7 +96,20 @@ def stop_recording(socketio_instance):
         "action": "stop",
         "shouldUpload": True
     })
+
+    if (
+            runtime_config['mems_enabled']
+            and sensors.mems_microphone
+            and sensors.mems_microphone.is_connected
+            and mems_error is None):
+        try:
+            sensors.mems_microphone.download_recording()
+        except Exception as exc:
+            mems_error = str(exc)
+            print(f"Failed to download MEMS recording: {exc}")
+
     filename_prefix = None
+    return mems_error is None, mems_error
 
 def kill_recording(socketio_instance):
     global filename_prefix
@@ -76,6 +122,8 @@ def kill_recording(socketio_instance):
     for t in trackers.active_trackers.values():
         if getattr(t, 'is_connected', False):
             t.kill_recording()
+    if sensors.mems_microphone:
+        sensors.mems_microphone.kill_recording()
     filename_prefix = None
 
 
@@ -101,6 +149,8 @@ def delete_last_recording():
     scan_folder('videos', True)
     for f in ['usg', 'usg_timestamps', 'video_timestamps', 'dobot', 'imu', 'psmove']:
         scan_folder(f, False)
+    audio_folder = config["local_dir"]
+    scan_folder(audio_folder, False)
 
     if not all_files:
         return ""
@@ -124,10 +174,13 @@ def delete_last_recording():
         'usg_timestamps': 'USGTimestamps',
         'dobot': 'Dobot',
         'imu': 'IMU',
-        'psmove': 'PSMove'
+        'psmove': 'PSMove',
+        audio_folder: 'MEMSAudio',
     }
     
-    for f in ['videos', 'usg', 'video_timestamps', 'usg_timestamps', 'dobot', 'imu', 'psmove']:
+    for f in [
+            'videos', 'usg', 'video_timestamps', 'usg_timestamps',
+            'dobot', 'imu', 'psmove', audio_folder]:
         if f in deleted_folders:
             parts.append(folder_mapping[f])
             

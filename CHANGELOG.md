@@ -4,11 +4,14 @@ All notable changes to this project will be documented in this file. The format 
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased] - yyyy-mm-dd
+## [0.5.0] - 2026-07-25
 ### Added
-### Deleted
+- Optional Raspberry Pi MEMS WAV recording controlled from the Devices section
+- Camera/MEMS synchronization using the VibroNav chirp
+- Synchronization sound output selection
 ### Changed
-### Fixed
+- Camera audio source changes now restart both camera streams
+
 
 ## [0.4.2] - 2026-05-19
 ### Fixed

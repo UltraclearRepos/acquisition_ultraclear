@@ -25,6 +25,7 @@ const speedValueEl = document.getElementById("speedValue");
 const timerEl = document.getElementById("recordingTimer");
 
 const audioInputSelect = document.getElementById("audioSource");
+const microOutputSelect = document.getElementById("microOutput");
 const videoSelect = document.getElementById("videoSource");
 const videoSelect2 = document.getElementById("videoSource2");
 const selectors = [audioInputSelect, videoSelect, videoSelect2];
@@ -60,9 +61,11 @@ let isUsgOn = false;
 const deviceUSG = document.getElementById("deviceUSG");
 const trackerIMU = document.getElementById("trackerIMU");
 const trackerPSMove = document.getElementById("trackerPSMove");
+const deviceMEMS = document.getElementById("deviceMEMS");
 const deviceUSGStatus = document.getElementById("deviceUSGStatus");
 const trackerIMUStatus = document.getElementById("trackerIMUStatus");
 const trackerPSMoveStatus = document.getElementById("trackerPSMoveStatus");
+const deviceMEMSStatus = document.getElementById("deviceMEMSStatus");
 const usgStream = document.getElementById("usgStream");
 
 const DEFAULT_CONFIG = {
@@ -279,6 +282,23 @@ function getDevices(deviceInfos) {
 	});
 }
 
+async function setOutputDevices() {
+	try {
+		const response = await fetch("/get-audio-outputs");
+		if (!response.ok) throw new Error("Could not enumerate audio outputs");
+		const devices = await response.json();
+		microOutputSelect.innerHTML = "";
+		devices.forEach(device => {
+			const option = document.createElement("option");
+			option.value = device.id;
+			option.textContent = device.name;
+			microOutputSelect.appendChild(option);
+		});
+	} catch (error) {
+		console.error("Error loading synchronization sound outputs:", error);
+	}
+}
+
 
 
 function handleError(error) {
@@ -359,12 +379,17 @@ async function startFirstCamera() {
 		const videoSource = videoSelect.value;
 		if (videoSource === "none") {
 			if (localStream) {
-				localStream.getTracks().forEach(t => t.stop());
+				localStream.getVideoTracks().forEach(t => t.stop());
 				localStream = null;
 				liveVideoElement.srcObject = null;
 				resVideo1El.textContent = "";
 			}
 			return;
+		}
+		if (localStream) {
+			localStream.getVideoTracks().forEach(t => t.stop());
+			localStream = null;
+			liveVideoElement.srcObject = null;
 		}
 		const { composed, videoTrack } = await buildComposedStream(videoSource, 640, 360);
 		localStream = composed;
@@ -385,12 +410,17 @@ async function startSecondCamera() {
 		const videoSource2 = videoSelect2.value;
 		if (videoSource2 === "none") {
 			if (localStream2) {
-				localStream2.getTracks().forEach(t => t.stop());
+				localStream2.getVideoTracks().forEach(t => t.stop());
 				localStream2 = null;
 				liveVideoElement2.srcObject = null;
 				resVideo2El.textContent = "";
 			}
 			return;
+		}
+		if (localStream2) {
+			localStream2.getVideoTracks().forEach(t => t.stop());
+			localStream2 = null;
+			liveVideoElement2.srcObject = null;
 		}
 		if (videoSource2 === videoSelect.value) {
 			console.warn("Second camera uses the same device as the first. Skipping to avoid timeout.");
@@ -410,12 +440,37 @@ async function startSecondCamera() {
 	}
 }
 
+async function restartCamerasForAudioChange() {
+	if (sharedAudioTrack) {
+		sharedAudioTrack.stop();
+		sharedAudioTrack = null;
+	}
+	await startFirstCamera();
+	await startSecondCamera();
+}
 
+async function selectMicroOutput() {
+	try {
+		const response = await fetch("/set-micro-output", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ micro_output: microOutputSelect.value })
+		});
+		const data = await response.json();
+		if (!response.ok) {
+			throw new Error(data.message || "Could not select audio output");
+		}
+		console.log("Synchronization sound output set:", data);
+	} catch (error) {
+		console.error("Error setting synchronization sound output:", error);
+		alert(error.message);
+	}
+}
 
-
-audioInputSelect.onchange = startFirstCamera;
+audioInputSelect.onchange = restartCamerasForAudioChange;
 videoSelect.onchange = startFirstCamera;
 videoSelect2.onchange = startSecondCamera;
+microOutputSelect.onchange = selectMicroOutput;
 
 
 navigator.mediaDevices.ondevicechange = function (event) {
@@ -432,6 +487,9 @@ function toggleButtons(automation_running) {
 	startRecordingBt.disabled = automation_running;
 	stopRecordingBt.disabled = !automation_running;
 	toggleUsgBtn.disabled = automation_running;
+	deviceMEMS.disabled = automation_running;
+	audioInputSelect.disabled = automation_running;
+	microOutputSelect.disabled = automation_running;
 }
 
 function startAutomation() {
@@ -449,6 +507,15 @@ function startAutomation() {
 	}
 	if (repetitions <= 0) {
 		return alert("Repetitions must be greater then 0");
+	}
+	if (deviceMEMS.checked && audioInputSelect.value === "none") {
+		return alert(
+			"Select a camera audio input so the synchronization chirp is " +
+			"recorded in both the camera video and the Raspberry Pi WAV."
+		);
+	}
+	if (deviceMEMS.checked && !localStream && !localStream2) {
+		return alert("Select at least one camera before starting the recording.");
 	}
 
 	const points = Array.from(document.querySelectorAll('.point-row')).map(row => {
@@ -533,13 +600,26 @@ function startManualRecording() {
 	if (!username) {
 		return alert("Please pass username");
 	}
+	if (deviceMEMS.checked && audioInputSelect.value === "none") {
+		return alert(
+			"Select a camera audio input so the synchronization chirp is " +
+			"recorded in both the camera video and the Raspberry Pi WAV."
+		);
+	}
+	if (deviceMEMS.checked && !localStream && !localStream2) {
+		return alert("Select at least one camera before starting the recording.");
+	}
 
 	fetch("/start-manual", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({ description: description, username: username })
 	})
-		.then(res => res.json())
+		.then(async res => {
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error || data.message || "Server error");
+			return data;
+		})
 		.then(data => {
 			if (data.status === "ok") {
 				toggleButtons(true);
@@ -551,6 +631,7 @@ function startManualRecording() {
 		})
 		.catch(err => {
 			console.error("Error starting recording: ", err);
+			alert("Failed to start recording: " + err.message);
 		});
 }
 
@@ -667,6 +748,34 @@ function handleTrackerToggle(trackerName, checkbox, statusElement) {
 		});
 }
 
+function handleMemsToggle() {
+	const enable = deviceMEMS.checked;
+	deviceMEMS.disabled = true;
+	updateDeviceStatus(deviceMEMSStatus, "loading");
+
+	fetch("/device-mems-toggle", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ enable: enable })
+	})
+		.then(async response => {
+			const data = await response.json();
+			if (!response.ok || data.status !== "ok") {
+				throw new Error(data.message || "Could not toggle MEMS microphone");
+			}
+			updateDeviceStatus(deviceMEMSStatus, data.state);
+		})
+		.catch(error => {
+			console.error("Error toggling Raspberry Pi MEMS microphone:", error);
+			deviceMEMS.checked = !enable;
+			updateDeviceStatus(deviceMEMSStatus, "error");
+			alert("Error toggling Raspberry Pi MEMS microphone: " + error.message);
+		})
+		.finally(() => {
+			deviceMEMS.disabled = false;
+		});
+}
+
 (async function init() {
 
 	const cfg = await loadConfig();
@@ -677,6 +786,7 @@ function handleTrackerToggle(trackerName, checkbox, statusElement) {
 	stream.getTracks().forEach((t) => t.stop())
 	const devices = await navigator.mediaDevices.enumerateDevices();
 	getDevices(devices);
+	await setOutputDevices();
 
 	await startFirstCamera();
 	await startSecondCamera();
@@ -696,6 +806,10 @@ function handleTrackerToggle(trackerName, checkbox, statusElement) {
 			if (data.tracker_psmove) {
 				trackerPSMove.checked = data.tracker_psmove.enabled;
 				updateDeviceStatus(trackerPSMoveStatus, data.tracker_psmove.enabled ? (data.tracker_psmove.initialized ? 'on' : 'error') : 'off');
+			}
+			if (data.mems) {
+				deviceMEMS.checked = data.mems.enabled;
+				updateDeviceStatus(deviceMEMSStatus, data.mems.enabled ? (data.mems.initialized ? 'on' : 'error') : 'off');
 			}
 		})
 		.catch(err => console.error("Error fetching device status:", err));
@@ -725,6 +839,7 @@ addPointBtn.addEventListener("click", addPointRow);
 deviceUSG.addEventListener("change", () => handleUsgToggle(deviceUSG, deviceUSGStatus));
 trackerIMU.addEventListener("change", () => handleTrackerToggle("imu", trackerIMU, trackerIMUStatus));
 trackerPSMove.addEventListener("change", () => handleTrackerToggle("psmove", trackerPSMove, trackerPSMoveStatus));
+deviceMEMS.addEventListener("change", handleMemsToggle);
 
 
 toggleUsgBtn.addEventListener("click", () => {

@@ -17,6 +17,7 @@ import sounddevice as sd
 from uclr_acquisition import sensors, trackers
 from uclr_acquisition.config import config
 from uclr_acquisition.sensors.usg import USGScanner
+from uclr_acquisition.sensors.mems import MEMSMicrophone
 from uclr_acquisition.trackers.imu import IMUTracker
 from uclr_acquisition.trackers.psmove import PSMoveTracker
 from uclr_acquisition.runtime_config import runtime_config
@@ -185,6 +186,53 @@ def device_tracker_toggle():
             
         return jsonify({"status": "ok", "state": "off"})
 
+@app.route('/device-mems-toggle', methods=['POST'])
+def device_mems_toggle():
+    print("Received device-mems-toggle/POST request")
+    enable = bool((request.get_json(silent=True) or {}).get("enable"))
+
+    if enable:
+        if (sensors.mems_microphone is None or not sensors.mems_microphone.is_connected):
+            try:
+                if sensors.mems_microphone is not None:
+                    sensors.mems_microphone.disconnect()
+                rpi_config = config["raspberry_pi"]
+                sensors.mems_microphone = MEMSMicrophone(
+                    hostname=rpi_config["host"],
+                    port=rpi_config["port"],
+                    username=rpi_config["username"],
+                    password=rpi_config["password"],
+                    remote_dir=config["remote_dir"],
+                    local_dir=config["local_dir"],
+                )
+                sensors.mems_microphone.connect()
+            except Exception as exc:
+                print(f"Failed to connect Raspberry Pi MEMS microphone: {exc}")
+                if sensors.mems_microphone is not None:
+                    try:
+                        sensors.mems_microphone.disconnect()
+                    except Exception:
+                        pass
+                sensors.mems_microphone = None
+                runtime_config.set_value('mems_enabled', False)
+                return jsonify({
+                    "status": "error",
+                    "message": str(exc),
+                }), 500
+        runtime_config.set_value('mems_enabled', True)
+        return jsonify({"status": "ok", "state": "on"})
+
+    if sensors.mems_microphone is not None:
+        if sensors.mems_microphone.is_recording:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot disconnect the MEMS microphone while recording.",
+            }), 409
+        sensors.mems_microphone.disconnect()
+        sensors.mems_microphone = None
+    runtime_config.set_value('mems_enabled', False)
+    return jsonify({"status": "ok", "state": "off"})
+
 @app.route('/device-status', methods=['GET'])
 def device_status():
     status = {
@@ -199,9 +247,52 @@ def device_status():
         "tracker_psmove": {
             "enabled": "psmove" in runtime_config['active_trackers'],
             "initialized": "psmove" in trackers.active_trackers and getattr(trackers.active_trackers["psmove"], 'is_connected', False)
+        },
+        "mems": {
+            "enabled": runtime_config['mems_enabled'],
+            "initialized": bool(sensors.mems_microphone and sensors.mems_microphone.is_connected
+            ),
         }
     }
     return jsonify(status)
+
+@app.route('/get-audio-outputs', methods=['GET'])
+def get_audio_outputs():
+    print("Received get-audio-outputs/GET request")
+    outputs = [
+        {"id": "", "name": "No synchronization sound"},
+    ]
+    seen = set()
+    default_hostapi = sd.default.hostapi
+
+    for index, device in enumerate(sd.query_devices()):
+        name = device["name"].strip()
+        if (
+                device["max_output_channels"] > 0
+                and name
+                and name not in seen
+                and device["hostapi"] == default_hostapi):
+            outputs.append({"id": str(index), "name": name})
+            seen.add(name)
+
+    return jsonify(outputs)
+
+@app.route('/set-micro-output', methods=['POST'])
+def set_micro_output():
+    print("Received set-micro-output/POST request")
+    output_id = (request.get_json(silent=True) or {}).get("micro_output")
+
+    try:
+        output_index = int(output_id) if output_id not in (None, "") else None
+        if output_index is not None:
+            device = sd.query_devices(output_index)
+            if device["max_output_channels"] <= 0:
+                raise ValueError("Selected device has no output channels.")
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+    runtime_config.set_value('sync_output', output_index)
+    return jsonify({"status": "ok", "micro_output": output_index})
 
 @app.route("/config", methods=['GET'])
 def api_config():
@@ -265,7 +356,9 @@ def start_manual():
 @app.route("/stop-manual", methods=['POST'])
 def stop_manual():
     print("Received stop-manual/POST request")
-    stop_recording(socketio)
+    success, message = stop_recording(socketio)
+    if not success:
+        return jsonify({"status": "error", "message": message}), 500
     return jsonify({"status": "ok"})
 
 @app.route('/delete-last-recording', methods=['POST'])
@@ -306,6 +399,10 @@ def main():
         for t in trackers.active_trackers.values():
             if getattr(t, 'is_connected', False) or getattr(t, 'running', False):
                 t.stop()
+        if sensors.mems_microphone:
+            if sensors.mems_microphone.is_recording:
+                sensors.mems_microphone.kill_recording()
+            sensors.mems_microphone.disconnect()
         os._exit(0)
 
 if __name__ == '__main__':

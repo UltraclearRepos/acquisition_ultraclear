@@ -116,9 +116,11 @@ def run_automation(
         
         time.sleep(0.5)
 
-        stop_recording(socketio_instance)
+        is_stopped, stop_message = stop_recording(socketio_instance)
         dobot_logger.stop_and_save()
         dobot_logger = None
+        if not is_stopped:
+            raise RuntimeError(f"Recording stop failed: {stop_message}")
 
         time.sleep(1)
 
