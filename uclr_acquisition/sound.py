@@ -1,8 +1,6 @@
 import numpy as np
 import sounddevice as sd
 
-from .runtime_config import runtime_config
-
 
 def generate_chirp_signal(
         duration=0.2,
@@ -19,21 +17,12 @@ def generate_chirp_signal(
 
 
 def play_chirp_signal(delay=0, sample_rate=44100):
-    """Play the synchronization chirp through the selected PC output."""
-    output_device = runtime_config['sync_output']
-    if output_device is None:
-        print("Synchronization chirp skipped - no output device selected.")
-        return True
-
+    """Play the synchronization chirp through the system default output."""
     try:
         delayed_signal = np.hstack(
             (np.zeros(int(delay * sample_rate)), _CHIRP_SIGNAL)
         )
-        sd.play(
-            delayed_signal,
-            sample_rate,
-            device=output_device,
-        )
+        sd.play(delayed_signal, sample_rate)
         return True
     except Exception as exc:
         print(f"Error playing synchronization chirp: {exc}")

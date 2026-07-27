@@ -13,7 +13,6 @@ import argparse
 import os
 from pathlib import Path
 from flask_socketio import SocketIO
-import sounddevice as sd
 from uclr_acquisition import sensors, trackers
 from uclr_acquisition.config import config
 from uclr_acquisition.sensors.usg import USGScanner
@@ -255,51 +254,6 @@ def device_status():
         }
     }
     return jsonify(status)
-
-@app.route('/get-audio-outputs', methods=['GET'])
-def get_audio_outputs():
-    print("Received get-audio-outputs/GET request")
-    outputs = [
-        {"id": "", "name": "No synchronization sound"},
-    ]
-    seen = set()
-    default_hostapi = sd.default.hostapi
-
-    for index, device in enumerate(sd.query_devices()):
-        name = device["name"].strip()
-        if (
-                device["max_output_channels"] > 0
-                and name
-                and name not in seen
-                and device["hostapi"] == default_hostapi):
-            outputs.append({"id": str(index), "name": name})
-            seen.add(name)
-
-    return jsonify(outputs)
-
-@app.route('/set-micro-output', methods=['POST'])
-def set_micro_output():
-    print("Received set-micro-output/POST request")
-    output_id = (request.get_json(silent=True) or {}).get("micro_output")
-
-    try:
-        output_index = int(output_id) if output_id not in (None, "") else None
-        if output_index is not None:
-            device = sd.query_devices(output_index)
-            if device["max_output_channels"] <= 0:
-                raise ValueError("Selected device has no output channels.")
-    except Exception as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 400
-
-    runtime_config.set_value('sync_output', output_index)
-    return jsonify({"status": "ok", "micro_output": output_index})
-
-@app.route("/config", methods=['GET'])
-def api_config():
-    print("Received config/GET request")
-    return jsonify({
-        "speeds": config["speeds"]
-    })
 
 @app.route("/run", methods=["POST"])
 def run():

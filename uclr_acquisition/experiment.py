@@ -141,7 +141,7 @@ if __name__ == "__main__":
     run_automation(
         username="test_user",
         material=config["materials"][0],
-        speed=config["speeds"][1],
+        speed=50,
         motion_type=None,
         p1=None,
         p2=None,

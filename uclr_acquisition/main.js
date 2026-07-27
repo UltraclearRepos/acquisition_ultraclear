@@ -25,7 +25,6 @@ const speedValueEl = document.getElementById("speedValue");
 const timerEl = document.getElementById("recordingTimer");
 
 const audioInputSelect = document.getElementById("audioSource");
-const microOutputSelect = document.getElementById("microOutput");
 const videoSelect = document.getElementById("videoSource");
 const videoSelect2 = document.getElementById("videoSource2");
 const selectors = [audioInputSelect, videoSelect, videoSelect2];
@@ -67,10 +66,6 @@ const trackerIMUStatus = document.getElementById("trackerIMUStatus");
 const trackerPSMoveStatus = document.getElementById("trackerPSMoveStatus");
 const deviceMEMSStatus = document.getElementById("deviceMEMSStatus");
 const usgStream = document.getElementById("usgStream");
-
-const DEFAULT_CONFIG = {
-	speeds: ["slow", "medium", "fast"]
-};
 
 const socket = io();
 socket.on("connect", () => {
@@ -235,17 +230,6 @@ function renderSelectOptions(selectElement, values, renderEmpty = true) {
 	})
 }
 
-async function loadConfig() {
-	try {
-		const res = await fetch("/config");
-		if (!res.ok) throw new Error();
-		return await res.json();
-	} catch {
-		console.warn("/api/config caused error. Default config to be used")
-		return DEFAULT_CONFIG
-	}
-}
-
 function getDevices(deviceInfos) {
 	// Handles being called several times to update labels. Preserve values.
 	const values = selectors.map(select => select.value);
@@ -281,25 +265,6 @@ function getDevices(deviceInfos) {
 		}
 	});
 }
-
-async function setOutputDevices() {
-	try {
-		const response = await fetch("/get-audio-outputs");
-		if (!response.ok) throw new Error("Could not enumerate audio outputs");
-		const devices = await response.json();
-		microOutputSelect.innerHTML = "";
-		devices.forEach(device => {
-			const option = document.createElement("option");
-			option.value = device.id;
-			option.textContent = device.name;
-			microOutputSelect.appendChild(option);
-		});
-	} catch (error) {
-		console.error("Error loading synchronization sound outputs:", error);
-	}
-}
-
-
 
 function handleError(error) {
 	console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
@@ -449,28 +414,9 @@ async function restartCamerasForAudioChange() {
 	await startSecondCamera();
 }
 
-async function selectMicroOutput() {
-	try {
-		const response = await fetch("/set-micro-output", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ micro_output: microOutputSelect.value })
-		});
-		const data = await response.json();
-		if (!response.ok) {
-			throw new Error(data.message || "Could not select audio output");
-		}
-		console.log("Synchronization sound output set:", data);
-	} catch (error) {
-		console.error("Error setting synchronization sound output:", error);
-		alert(error.message);
-	}
-}
-
 audioInputSelect.onchange = restartCamerasForAudioChange;
 videoSelect.onchange = startFirstCamera;
 videoSelect2.onchange = startSecondCamera;
-microOutputSelect.onchange = selectMicroOutput;
 
 
 navigator.mediaDevices.ondevicechange = function (event) {
@@ -489,7 +435,6 @@ function toggleButtons(automation_running) {
 	toggleUsgBtn.disabled = automation_running;
 	deviceMEMS.disabled = automation_running;
 	audioInputSelect.disabled = automation_running;
-	microOutputSelect.disabled = automation_running;
 }
 
 function startAutomation() {
@@ -508,16 +453,6 @@ function startAutomation() {
 	if (repetitions <= 0) {
 		return alert("Repetitions must be greater then 0");
 	}
-	if (deviceMEMS.checked && audioInputSelect.value === "none") {
-		return alert(
-			"Select a camera audio input so the synchronization chirp is " +
-			"recorded in both the camera video and the Raspberry Pi WAV."
-		);
-	}
-	if (deviceMEMS.checked && !localStream && !localStream2) {
-		return alert("Select at least one camera before starting the recording.");
-	}
-
 	const points = Array.from(document.querySelectorAll('.point-row')).map(row => {
 		return {
 			x: parseFloat(row.querySelector('.point-x').value) || 0,
@@ -600,16 +535,6 @@ function startManualRecording() {
 	if (!username) {
 		return alert("Please pass username");
 	}
-	if (deviceMEMS.checked && audioInputSelect.value === "none") {
-		return alert(
-			"Select a camera audio input so the synchronization chirp is " +
-			"recorded in both the camera video and the Raspberry Pi WAV."
-		);
-	}
-	if (deviceMEMS.checked && !localStream && !localStream2) {
-		return alert("Select at least one camera before starting the recording.");
-	}
-
 	fetch("/start-manual", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
@@ -778,15 +703,11 @@ function handleMemsToggle() {
 
 (async function init() {
 
-	const cfg = await loadConfig();
-
-
 	// for getting devices and permissions
 	const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 	stream.getTracks().forEach((t) => t.stop())
 	const devices = await navigator.mediaDevices.enumerateDevices();
 	getDevices(devices);
-	await setOutputDevices();
 
 	await startFirstCamera();
 	await startSecondCamera();

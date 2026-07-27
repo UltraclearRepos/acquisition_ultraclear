@@ -39,7 +39,7 @@ def start_recording(output_filename_prefix, socketio_instance):
         "filename": video_filename
     })
 
-    if runtime_config['mems_enabled']:
+    if runtime_config['mems_enabled'] and sensors.mems_microphone:
         try:
             sensors.mems_microphone.start_recording(
                 f"{output_filename_prefix}.wav"
