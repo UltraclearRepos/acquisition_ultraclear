@@ -73,11 +73,6 @@ All configuration is stored in one `setup.json` file:
 
 ```json
 {
-  "speeds": [
-    "slow",
-    "medium",
-    "fast"
-  ],
   "usg_dll_path": "C:\\path\\to\\usgfw2wrapper.dll",
   "psmove_dll_path": "C:\\path\\to\\PSMoveClient_CAPI.dll",
   "imu_port": "COM11",
@@ -117,8 +112,7 @@ The application opens the browser automatically. The default address is
 2. Select one or two camera sources.
 3. Select `Camera audio input source` to embed audio in the camera recordings.
    Selecting `None` records video without an audio track.
-4. Optionally select `Synchronization sound output`.
-5. Configure the Dobot path and start automation, or switch to manual mode.
+4. Configure the Dobot path and start automation, or switch to manual mode.
 
 Both camera recordings use the same browser audio track. Audio is embedded
 directly in each WebM file and is not saved as a separate camera-audio file.
@@ -127,10 +121,10 @@ When the Raspberry Pi MEMS microphone is enabled, it records a stereo,
 48 kHz, 32-bit WAV using `arecord`. The WAV is downloaded to `local_dir`
 after recording.
 
-If a synchronization output is selected, the application plays the same
-0.2-second, 500-4000 Hz chirp used by VibroNav after the MEMS recorder starts.
+After the MEMS recorder starts, the application plays the same 0.2-second,
+500-4000 Hz chirp used by VibroNav through the system default audio output.
 The chirp is a marker for aligning camera audio and the Raspberry Pi WAV
-during post-processing. Without a selected output, the chirp is skipped.
+during post-processing.
 
 ## Output files
 

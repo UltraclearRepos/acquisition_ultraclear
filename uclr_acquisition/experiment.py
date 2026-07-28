@@ -40,6 +40,7 @@ def run_automation(
         description, 
         num_iterations, 
         num_repetitions,
+        initial_sleep_time,
         sleep_time, 
         stop_event, 
         socketio_instance):
@@ -92,8 +93,14 @@ def run_automation(
         dobot_logger = DobotLogger(dashboard, dobot_filepath)
         dobot_logger.start()
 
-        time.sleep(0.5)
         print(f"Recording {i+1}/{num_iterations} started.")
+
+        if initial_sleep_time > 0:
+            print(
+                f"Waiting {initial_sleep_time}s before moving "
+                "to the second point."
+            )
+            time.sleep(initial_sleep_time)
 
         for _ in range(num_repetitions):
             if stop_event.is_set():

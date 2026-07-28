@@ -50,6 +50,7 @@ let sharedAudioTrack = null;
 let camStartTimestamp = null;
 
 const automationForm = document.getElementById("automationForm");
+const initialSleepTimeEl = document.getElementById("initialSleepTime");
 const sleepTimeEl = document.getElementById("sleepTime");
 const pointsContainer = document.getElementById("pointsContainer");
 const addPointBtn = document.getElementById("addPointBtn");
@@ -445,6 +446,7 @@ function startAutomation() {
 	const iterations = iterInput ? parseInt(iterInput, 10) || 1 : 1;
 	const repetitionsInput = repetitionsEl.value;
 	const repetitions = repetitionsInput ? parseInt(repetitionsInput, 10) || 1 : 1;
+	const initialSleepTime = parseInt(initialSleepTimeEl.value);
 	const sleepTime = parseInt(sleepTimeEl.value);
 
 	if (iterations <= 0) {
@@ -472,6 +474,7 @@ function startAutomation() {
 		iterations: iterations,
 		repetitions: repetitions,
 		points: points,
+		initialSleepTime: initialSleepTime,
 		sleepTime: sleepTime
 	};
 

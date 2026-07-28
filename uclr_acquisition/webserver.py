@@ -275,6 +275,7 @@ def run():
             description = params.get("description", ""),
             num_iterations = int(params["iterations"]),
             num_repetitions = int(params.get("repetitions", 1)),
+            initial_sleep_time = int(params.get("initialSleepTime", 3)),
             sleep_time = int(params.get("sleepTime", 3)),
             stop_event = stop_event,
             socketio_instance=socketio
