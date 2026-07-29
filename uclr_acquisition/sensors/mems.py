@@ -62,6 +62,8 @@ class MEMSMicrophone:
                 port=self.port,
                 username=self.username,
                 password=self.password,
+                allow_agent=False,
+                look_for_keys=False,
                 timeout=10,
             )
             self.ssh = client
