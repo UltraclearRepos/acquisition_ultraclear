@@ -13,10 +13,10 @@ import argparse
 import os
 from pathlib import Path
 from flask_socketio import SocketIO
-import sounddevice as sd
 from uclr_acquisition import sensors, trackers
 from uclr_acquisition.config import config
 from uclr_acquisition.sensors.usg import USGScanner
+from uclr_acquisition.sensors.mems import MEMSMicrophone
 from uclr_acquisition.trackers.imu import IMUTracker
 from uclr_acquisition.trackers.psmove import PSMoveTracker
 from uclr_acquisition.runtime_config import runtime_config
@@ -185,6 +185,53 @@ def device_tracker_toggle():
             
         return jsonify({"status": "ok", "state": "off"})
 
+@app.route('/device-mems-toggle', methods=['POST'])
+def device_mems_toggle():
+    print("Received device-mems-toggle/POST request")
+    enable = bool((request.get_json(silent=True) or {}).get("enable"))
+
+    if enable:
+        if (sensors.mems_microphone is None or not sensors.mems_microphone.is_connected):
+            try:
+                if sensors.mems_microphone is not None:
+                    sensors.mems_microphone.disconnect()
+                rpi_config = config["raspberry_pi"]
+                sensors.mems_microphone = MEMSMicrophone(
+                    hostname=rpi_config["host"],
+                    port=rpi_config["port"],
+                    username=rpi_config["username"],
+                    password=rpi_config["password"],
+                    remote_dir=config["remote_dir"],
+                    local_dir=config["local_dir"],
+                )
+                sensors.mems_microphone.connect()
+            except Exception as exc:
+                print(f"Failed to connect Raspberry Pi MEMS microphone: {exc}")
+                if sensors.mems_microphone is not None:
+                    try:
+                        sensors.mems_microphone.disconnect()
+                    except Exception:
+                        pass
+                sensors.mems_microphone = None
+                runtime_config.set_value('mems_enabled', False)
+                return jsonify({
+                    "status": "error",
+                    "message": str(exc),
+                }), 500
+        runtime_config.set_value('mems_enabled', True)
+        return jsonify({"status": "ok", "state": "on"})
+
+    if sensors.mems_microphone is not None:
+        if sensors.mems_microphone.is_recording:
+            return jsonify({
+                "status": "error",
+                "message": "Cannot disconnect the MEMS microphone while recording.",
+            }), 409
+        sensors.mems_microphone.disconnect()
+        sensors.mems_microphone = None
+    runtime_config.set_value('mems_enabled', False)
+    return jsonify({"status": "ok", "state": "off"})
+
 @app.route('/device-status', methods=['GET'])
 def device_status():
     status = {
@@ -199,16 +246,14 @@ def device_status():
         "tracker_psmove": {
             "enabled": "psmove" in runtime_config['active_trackers'],
             "initialized": "psmove" in trackers.active_trackers and getattr(trackers.active_trackers["psmove"], 'is_connected', False)
+        },
+        "mems": {
+            "enabled": runtime_config['mems_enabled'],
+            "initialized": bool(sensors.mems_microphone and sensors.mems_microphone.is_connected
+            ),
         }
     }
     return jsonify(status)
-
-@app.route("/config", methods=['GET'])
-def api_config():
-    print("Received config/GET request")
-    return jsonify({
-        "speeds": config["speeds"]
-    })
 
 @app.route("/run", methods=["POST"])
 def run():
@@ -230,6 +275,7 @@ def run():
             description = params.get("description", ""),
             num_iterations = int(params["iterations"]),
             num_repetitions = int(params.get("repetitions", 1)),
+            initial_sleep_time = int(params.get("initialSleepTime", 3)),
             sleep_time = int(params.get("sleepTime", 3)),
             stop_event = stop_event,
             socketio_instance=socketio
@@ -265,7 +311,9 @@ def start_manual():
 @app.route("/stop-manual", methods=['POST'])
 def stop_manual():
     print("Received stop-manual/POST request")
-    stop_recording(socketio)
+    success, message = stop_recording(socketio)
+    if not success:
+        return jsonify({"status": "error", "message": message}), 500
     return jsonify({"status": "ok"})
 
 @app.route('/delete-last-recording', methods=['POST'])
@@ -306,6 +354,10 @@ def main():
         for t in trackers.active_trackers.values():
             if getattr(t, 'is_connected', False) or getattr(t, 'running', False):
                 t.stop()
+        if sensors.mems_microphone:
+            if sensors.mems_microphone.is_recording:
+                sensors.mems_microphone.kill_recording()
+            sensors.mems_microphone.disconnect()
         os._exit(0)
 
 if __name__ == '__main__':

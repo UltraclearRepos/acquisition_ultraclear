@@ -22,7 +22,8 @@ setup(
     install_requires=install_requires,
     extras_require={},
     package_data={
-        'uclr_acquisition': ['*.js', '*.css', '*.html', '*.txt']
+        'uclr_acquisition': ['*.js', '*.css', '*.html', '*.txt'],
+        'uclr_acquisition.sensors': ['*.txt'],
     },
     data_files=[],
     entry_points={

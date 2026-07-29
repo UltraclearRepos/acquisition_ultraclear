@@ -40,6 +40,7 @@ def run_automation(
         description, 
         num_iterations, 
         num_repetitions,
+        initial_sleep_time,
         sleep_time, 
         stop_event, 
         socketio_instance):
@@ -92,8 +93,14 @@ def run_automation(
         dobot_logger = DobotLogger(dashboard, dobot_filepath)
         dobot_logger.start()
 
-        time.sleep(0.5)
         print(f"Recording {i+1}/{num_iterations} started.")
+
+        if initial_sleep_time > 0:
+            print(
+                f"Waiting {initial_sleep_time}s before moving "
+                "to the second point."
+            )
+            time.sleep(initial_sleep_time)
 
         for _ in range(num_repetitions):
             if stop_event.is_set():
@@ -116,9 +123,11 @@ def run_automation(
         
         time.sleep(0.5)
 
-        stop_recording(socketio_instance)
+        is_stopped, stop_message = stop_recording(socketio_instance)
         dobot_logger.stop_and_save()
         dobot_logger = None
+        if not is_stopped:
+            raise RuntimeError(f"Recording stop failed: {stop_message}")
 
         time.sleep(1)
 
@@ -139,7 +148,7 @@ if __name__ == "__main__":
     run_automation(
         username="test_user",
         material=config["materials"][0],
-        speed=config["speeds"][1],
+        speed=50,
         motion_type=None,
         p1=None,
         p2=None,
