@@ -91,17 +91,16 @@ def stop_recording(socketio_instance):
         if getattr(t, 'is_connected', False):
             t.stop_recording(filename_prefix)
 
-    time.sleep(0.3)
+    time.sleep(0.1)
     socketio_instance.emit("record", {
         "action": "stop",
         "shouldUpload": True
     })
 
-    if (
-            runtime_config['mems_enabled']
-            and sensors.mems_microphone
-            and sensors.mems_microphone.is_connected
-            and mems_error is None):
+    if (runtime_config['mems_enabled']
+        and sensors.mems_microphone
+        and sensors.mems_microphone.is_connected
+        and mems_error is None):
         try:
             sensors.mems_microphone.download_recording()
         except Exception as exc:
