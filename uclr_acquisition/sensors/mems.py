@@ -30,7 +30,7 @@ class MEMSMicrophone:
         self.hostname = hostname
         self.port = int(port)
         self.username = username
-        self.password = password or None
+        self.password = password
         self.remote_dir = PurePosixPath(remote_dir)
         self.local_dir = Path(local_dir)
         self.device = device
@@ -85,10 +85,10 @@ class MEMSMicrophone:
 
     def _upload_alsa_config(self):
         local_config = Path(__file__).resolve().parent / "asoundrc.txt"
+        remote_config = "/home/pi/.asoundrc"
         with self.ssh.open_sftp() as sftp:
-            remote_home = PurePosixPath(sftp.normalize("."))
-            sftp.put(str(local_config), str(remote_home / ".asoundrc"))
-        print("Raspberry Pi ALSA configuration uploaded.")
+            sftp.put(str(local_config), remote_config)
+        print(f"Raspberry Pi ALSA configuration uploaded to {remote_config}.")
 
     def _exec(self, command):
         if not self.is_connected:
