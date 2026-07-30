@@ -4,8 +4,6 @@ from pathlib import Path, PurePosixPath
 
 import paramiko
 
-from uclr_acquisition.sound import play_chirp_signal
-
 
 class MEMSMicrophone:
     """Raspberry Pi MEMS sensor and remote WAV recorder controlled over SSH."""
@@ -62,6 +60,8 @@ class MEMSMicrophone:
                 port=self.port,
                 username=self.username,
                 password=self.password,
+                allow_agent=False,
+                look_for_keys=False,
                 timeout=10,
             )
             self.ssh = client
@@ -135,13 +135,6 @@ class MEMSMicrophone:
         self._exec(f"kill -0 {self.remote_pid}")
         self.is_recording = True
         print(f"MEMS recording started: {self.remote_path}")
-
-        if not play_chirp_signal():
-            self.kill_recording()
-            raise RuntimeError(
-                "MEMS recording started, but the synchronization chirp "
-                "could not be played."
-            )
 
     def stop_capture(self):
         """Stop arecord and wait until the WAV header/file is finalized."""

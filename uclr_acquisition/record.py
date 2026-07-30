@@ -1,6 +1,7 @@
 from .config import config
 from uclr_acquisition import sensors, trackers
 from uclr_acquisition.runtime_config import runtime_config
+from uclr_acquisition.sound import play_chirp_signal
 import time
 import os
 
@@ -34,36 +35,49 @@ def start_recording(output_filename_prefix, socketio_instance):
 
     video_filename = f"{output_filename_prefix}.webm"
 
+    if runtime_config['usg_enabled'] and sensors.usg_scanner:
+        sensors.usg_scanner.start_recording()
+
+    for t_type in runtime_config['active_trackers']:
+        if t_type in trackers.active_trackers:
+            trackers.active_trackers[t_type].start_recording()
+
+    mems_started = False
+    if sensors.mems_microphone:
+        try:
+            sensors.mems_microphone.start_recording(
+                f"{output_filename_prefix}.wav"
+            )
+            mems_started = True
+        except Exception as exc:
+            print(f"Failed to start MEMS recording: {exc}")
+            kill_recording(socketio_instance)
+            return False, str(exc)
+
+    time.sleep(0.3)
+
     socketio_instance.emit("record", {
         "action": "start",
         "filename": video_filename
     })
 
-    if runtime_config['mems_enabled'] and sensors.mems_microphone:
-        try:
-            sensors.mems_microphone.start_recording(
-                f"{output_filename_prefix}.wav"
-            )
-        except Exception as exc:
-            print(f"Failed to start MEMS recording: {exc}")
-            socketio_instance.emit("record", {
-                "action": "stop",
-                "shouldUpload": False
-            })
-            filename_prefix = None
-            return False, str(exc)
-
-    if runtime_config['usg_enabled'] and sensors.usg_scanner:
-        sensors.usg_scanner.start_recording()
-    
-    for t_type in runtime_config['active_trackers']:
-        if t_type in trackers.active_trackers:
-            trackers.active_trackers[t_type].start_recording()
+    time.sleep(0.3)
+    if mems_started and not play_chirp_signal():
+        error = "The synchronization chirp could not be played."
+        print(error)
+        kill_recording(socketio_instance)
+        return False, error
 
     return True, None
 
 def stop_recording(socketio_instance):
     global filename_prefix
+
+    socketio_instance.emit("record", {
+        "action": "stop",
+        "shouldUpload": True
+    })
+    time.sleep(0.3)
 
     mems_error = None
     if runtime_config['mems_enabled']:
@@ -90,12 +104,6 @@ def stop_recording(socketio_instance):
     for t in trackers.active_trackers.values():
         if getattr(t, 'is_connected', False):
             t.stop_recording(filename_prefix)
-
-    time.sleep(0.1)
-    socketio_instance.emit("record", {
-        "action": "stop",
-        "shouldUpload": True
-    })
 
     if (runtime_config['mems_enabled']
         and sensors.mems_microphone
