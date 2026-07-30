@@ -83,15 +83,15 @@ def run_automation(
         time.sleep(0.3)
 
         output_filename_prefix = build_filename(description, f'Speed-{speed}')
-        
-        is_started, msg = start_recording(output_filename_prefix, socketio_instance)
-
-        if not is_started:
-            raise RuntimeError(f"Recording failed: {msg}")
 
         dobot_filepath = os.path.join("dobot", f"{output_filename_prefix}.csv")
         dobot_logger = DobotLogger(dashboard, dobot_filepath)
         dobot_logger.start()
+
+        is_started, msg = start_recording(output_filename_prefix, socketio_instance)
+
+        if not is_started:
+            raise RuntimeError(f"Recording failed: {msg}")
 
         print(f"Recording {i+1}/{num_iterations} started.")
 

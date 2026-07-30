@@ -7,6 +7,8 @@ except:
     with open('requirements.txt') as fp:
         install_requires = fp.read()
 
+install_requires = install_requires.splitlines()
+
 setup(
     name='uclr-acquisition',
     version='0.1.0',
@@ -27,6 +29,9 @@ setup(
     },
     data_files=[],
     entry_points={
-        'console_scripts': ['uclr_acquisition=uclr_acquisition.webserver:main'],
+        'console_scripts': [
+            'uclr_acquisition=uclr_acquisition.webserver:main',
+            'uclr_sync=uclr_acquisition.synchronize:main',
+        ],
     }
 )
