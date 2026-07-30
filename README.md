@@ -121,10 +121,10 @@ When the Raspberry Pi MEMS microphone is enabled, it records a stereo,
 48 kHz, 32-bit WAV using `arecord`. The WAV is downloaded to `local_dir`
 after recording.
 
-After the MEMS recorder starts, the application plays the same 0.2-second,
-500-4000 Hz chirp used by VibroNav through the system default audio output.
-The chirp is a marker for aligning camera audio and the Raspberry Pi WAV
-during post-processing.
+After the MEMS recorder and camera start, the application plays the same
+0.2-second, 500-4000 Hz chirp used by VibroNav through the system default
+audio output. The chirp is a marker for aligning camera audio and the
+Raspberry Pi WAV during post-processing.
 
 ## Output files
 
@@ -139,6 +139,50 @@ Depending on the enabled devices, recordings are stored in:
 
 `Delete Last Recording` removes files belonging to the most recent recording
 from the local output directories.
+
+## Synchronization
+
+The package installs a separate synchronization command:
+
+```powershell
+uclr_sync
+```
+
+Run it from the acquisition directory containing `videos/`, `micro_data/`,
+`dobot/`, `usg_timestamps/`, `imu/`, and `psmove/`. It can also be started
+without the console entry point:
+
+```powershell
+python -m uclr_acquisition.synchronize
+```
+
+The synchronization delays are defined at the top of
+`uclr_acquisition/synchronize.py`. Every device uses the same convention:
+
+```text
+delay = device_time - camera_time
+sync_timestamp = timestamp - delay
+```
+
+For each camera recording, the script finds data files with the same recording
+name and adds or updates their `sync_timestamp` column. It processes Dobot,
+USG timestamp, IMU, and PSMove CSV files. Both `timestamp` and `Timestamp`
+column names are supported.
+
+For a matching Raspberry Pi WAV, the script:
+
+1. extracts the embedded camera audio with FFmpeg,
+2. finds the synchronization chirp in both audio streams,
+3. calculates the difference between the chirp positions,
+4. removes the corresponding beginning of the WAV when the MEMS chirp occurs
+   later than the camera chirp.
+
+Camera WebM files and USG MP4 files are not trimmed. If no camera audio stream
+or synchronization chirp is found, the WAV remains unchanged.
+
+The script modifies matching CSV and WAV files in place. Keep a copy of the
+original recordings when the unmodified data is required. FFmpeg and
+`ffprobe` must be available on `PATH`.
 
 ## Raspberry Pi MEMS requirements
 
