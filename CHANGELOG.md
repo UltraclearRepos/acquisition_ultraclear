@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Added
 - Optional Raspberry Pi MEMS WAV recording controlled from the Devices section
 - Camera/MEMS synchronization using the VibroNav chirp
+- Synchronization tool
 ### Changed
 - Camera audio source changes now restart both camera streams
 
