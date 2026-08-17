@@ -32,6 +32,7 @@ setup(
         'console_scripts': [
             'uclr_acquisition=uclr_acquisition.webserver:main',
             'uclr_sync=uclr_acquisition.synchronize:main',
+            'uclr_annotate=uclr_acquisition.annotation.video_annotation:main',
         ],
     }
 )

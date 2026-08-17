@@ -184,6 +184,40 @@ The script modifies matching CSV and WAV files in place. Keep a copy of the
 original recordings when the unmodified data is required. FFmpeg and
 `ffprobe` must be available on `PATH`.
 
+## Video annotation
+
+The package installs a separate annotation command. Run it from the acquisition
+directory containing `videos/`, `setup.json`, and the configured `local_dir`:
+
+```powershell
+uclr_annotate
+```
+
+The command annotates `cam1` recordings by default. To annotate the second
+camera instead, run:
+
+```powershell
+uclr_annotate --camera cam2
+```
+
+Select audio channel `0` or `1` with:
+
+```powershell
+uclr_annotate --camera cam2 --audio-channel 1
+```
+
+Video paths are read automatically from `videos/`. Matching WAV files are read
+from `local_dir` in `setup.json`, falling back to `micro_data/` when no setting
+is available. Camera suffixes (`_cam1` and `_cam2`) are removed when matching a
+video to its WAV file. Annotation JSON files are saved in `annotations/`.
+
+The annotation window supports events 1-8, Space to pause or resume, A/D to
+move between frames while paused, N/P to move between recordings, C to clear
+new events, R to reset zoom, and Escape to exit. Waveform and spectrogram views
+can be selected from the control bar. The selected audio channel is used for
+visualization and playback. The tool does not read labelled-position files and
+does not display a velocity plot.
+
 ## Raspberry Pi MEMS requirements
 
 The application uploads the bundled ALSA configuration to the Raspberry Pi
