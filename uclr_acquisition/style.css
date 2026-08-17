@@ -549,6 +549,69 @@ input[type="range"] {
     margin-top: 8px;
 }
 
+.arc-parameters {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.movement-type-selector {
+    margin-top: 10px;
+    padding: 10px;
+    gap: 7px;
+    border: 1px solid #b8d8de;
+    border-left: 5px solid #287f8d;
+    border-radius: 7px;
+    background: linear-gradient(135deg, #f1fafb 0%, #e7f4f6 100%);
+    box-shadow: 0 2px 7px rgba(40, 127, 141, 0.12);
+}
+
+.movement-type-selector label {
+    color: #176776;
+    font-size: 13px;
+    letter-spacing: 0.02em;
+}
+
+#pathMode {
+    min-height: 38px;
+    border: 2px solid #6eabb5;
+    background-color: #fff;
+    color: #183c43;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(31, 87, 97, 0.1);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#pathMode:hover {
+    border-color: #287f8d;
+}
+
+#pathMode:focus {
+    border-color: #176776;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(40, 127, 141, 0.2);
+}
+
+.arc-parameters label {
+    color: #4c5f67;
+    font-size: 11px;
+}
+
+.arc-preview {
+    margin-top: 8px;
+    padding: 8px;
+    border: 1px solid #dce5e9;
+    border-radius: 4px;
+    background: #f8fafc;
+    color: #40545c;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
 .usg-toggle-group {
     margin-top: 15px;
     text-align: center;

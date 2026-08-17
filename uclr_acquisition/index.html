@@ -96,12 +96,41 @@
                                 </label>
                                 <input type="range" id="speed" name="speed" min="1" max="100" step="1" value="50" />
                             </div>
-                            <div class="form-group points-section">
+                            <div class="form-group movement-type-selector">
+                                <label for="pathMode">Dobot movement type</label>
+                                <select id="pathMode">
+                                    <option value="points">Coordinate path</option>
+                                    <option value="arc180">Circular arc 180°</option>
+                                </select>
+                            </div>
+                            <div id="pointsPathForm" class="form-group points-section">
                                 <label>Dobot Coordinates Path (X, Y, Z, R)</label>
                                 <div id="pointsContainer">
                                     <!-- Points will be injected here -->
                                 </div>
                                 <button type="button" id="addPointBtn" class="small-btn">+ Add dobot point</button>
+                            </div>
+                            <div id="arcPathForm" class="form-group" style="display: none;">
+                                <label>Circular arc parameters (angles: -90° → 0° → +90°)</label>
+                                <div class="arc-parameters">
+                                    <div class="param-group-wrapper">
+                                        <label for="arcCenterX">Center X (Xc)</label>
+                                        <input type="number" id="arcCenterX" value="350" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="arcCenterY">Center Y (Yc)</label>
+                                        <input type="number" id="arcCenterY" value="0" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="arcZ">Fixed Z</label>
+                                        <input type="number" id="arcZ" value="-50" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="arcRadius">Radius</label>
+                                        <input type="number" id="arcRadius" value="145" min="0.001" step="any" />
+                                    </div>
+                                </div>
+                                <div id="arcPointsPreview" class="arc-preview"></div>
                             </div>
                             <div class="form-group horizontal-group">
                                 <label for="initialSleepTime">Initial sleep time</label>
