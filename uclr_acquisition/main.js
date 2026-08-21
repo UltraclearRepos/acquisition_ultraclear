@@ -54,6 +54,14 @@ const initialSleepTimeEl = document.getElementById("initialSleepTime");
 const sleepTimeEl = document.getElementById("sleepTime");
 const pointsContainer = document.getElementById("pointsContainer");
 const addPointBtn = document.getElementById("addPointBtn");
+const pathModeEl = document.getElementById("pathMode");
+const pointsPathForm = document.getElementById("pointsPathForm");
+const arcPathForm = document.getElementById("arcPathForm");
+const arcCenterXEl = document.getElementById("arcCenterX");
+const arcCenterYEl = document.getElementById("arcCenterY");
+const arcZEl = document.getElementById("arcZ");
+const arcRadiusEl = document.getElementById("arcRadius");
+const arcPointsPreviewEl = document.getElementById("arcPointsPreview");
 const toggleUsgBtn = document.getElementById("toggleUsgBtn");
 
 let isUsgOn = false;
@@ -438,8 +446,7 @@ function toggleButtons(automation_running) {
 	audioInputSelect.disabled = automation_running;
 }
 
-function startAutomation() {
-
+function readCommonAutomationParams() {
 	const speed = parseInt(speedSlider.value);
 	const description = descriptionEl.value;
 	const iterInput = iterEl.value;
@@ -450,11 +457,38 @@ function startAutomation() {
 	const sleepTime = parseInt(sleepTimeEl.value);
 
 	if (iterations <= 0) {
-		return alert("Iterations must be greater then 0");
+		throw new Error("Iterations must be greater than 0.");
 	}
 	if (repetitions <= 0) {
-		return alert("Repetitions must be greater then 0");
+		throw new Error("Repetitions must be greater than 0.");
 	}
+
+	return {
+		speed,
+		description,
+		iterations,
+		repetitions,
+		initialSleepTime,
+		sleepTime
+	};
+}
+
+function startSelectedAutomation() {
+	let commonParams;
+	try {
+		commonParams = readCommonAutomationParams();
+	} catch (error) {
+		return alert(error.message);
+	}
+
+	const startForMode = automationModeStarters[pathModeEl.value];
+	if (!startForMode) {
+		return alert("Unsupported Dobot movement type.");
+	}
+	return startForMode(commonParams);
+}
+
+function startPointAutomation(commonParams) {
 	const points = Array.from(document.querySelectorAll('.point-row')).map(row => {
 		return {
 			x: parseFloat(row.querySelector('.point-x').value) || 0,
@@ -469,13 +503,8 @@ function startAutomation() {
 	}
 
 	const payload = {
-		speed: speed,
-		description: description,
-		iterations: iterations,
-		repetitions: repetitions,
+		...commonParams,
 		points: points,
-		initialSleepTime: initialSleepTime,
-		sleepTime: sleepTime
 	};
 
 
@@ -497,6 +526,95 @@ function startAutomation() {
 			console.error(err);
 		})
 
+}
+
+function readFiniteNumber(element, label) {
+	const value = Number(element.value);
+	if (!Number.isFinite(value)) {
+		throw new Error(`${label} must be a valid number.`);
+	}
+	return value;
+}
+
+function arcPoints(centerX, centerY, z, radius) {
+	return {
+		start: { x: centerX, y: centerY - radius, z: z, r: 90 },
+		mid: { x: centerX - radius, y: centerY, z: z, r: 0 },
+		end: { x: centerX, y: centerY + radius, z: z, r: -90 }
+	};
+}
+
+function updateArcPreview() {
+	try {
+		const centerX = readFiniteNumber(arcCenterXEl, "Center X");
+		const centerY = readFiniteNumber(arcCenterYEl, "Center Y");
+		const z = readFiniteNumber(arcZEl, "Fixed Z");
+		const radius = readFiniteNumber(arcRadiusEl, "Radius");
+		const points = arcPoints(centerX, centerY, z, radius);
+		const format = point => `X=${point.x.toFixed(2)}, Y=${point.y.toFixed(2)}, Z=${point.z.toFixed(2)}, R=${point.r.toFixed(2)}`;
+		arcPointsPreviewEl.textContent = `Start: ${format(points.start)}\nMid:   ${format(points.mid)}\nEnd:   ${format(points.end)}`;
+	} catch (error) {
+		arcPointsPreviewEl.textContent = error.message;
+	}
+}
+
+function startArcAutomation(commonParams) {
+	let centerX;
+	let centerY;
+	let z;
+	let radius;
+	try {
+		centerX = readFiniteNumber(arcCenterXEl, "Center X");
+		centerY = readFiniteNumber(arcCenterYEl, "Center Y");
+		z = readFiniteNumber(arcZEl, "Fixed Z");
+		radius = readFiniteNumber(arcRadiusEl, "Radius");
+	} catch (error) {
+		return alert(error.message);
+	}
+
+	if (radius <= 0) {
+		return alert("Radius must be greater than 0.");
+	}
+
+	const payload = {
+		...commonParams,
+		centerX,
+		centerY,
+		z,
+		radius
+	};
+
+	fetch("/run-arc", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(payload)
+	})
+		.then(async response => {
+			const data = await response.json();
+			if (!response.ok) throw new Error(data.error || "Server error");
+			return data;
+		})
+		.then(data => {
+			startAutomationBt.disabled = true;
+			console.log("Arc automation started: ", data);
+		})
+		.catch(error => {
+			toggleButtons(false);
+			console.error(error);
+			alert("Failed to start arc automation: " + error.message);
+		});
+}
+
+const automationModeStarters = {
+	points: startPointAutomation,
+	arc180: startArcAutomation
+};
+
+function updatePathMode() {
+	const isArc = pathModeEl.value === "arc180";
+	pointsPathForm.style.display = isArc ? "none" : "flex";
+	arcPathForm.style.display = isArc ? "flex" : "none";
+	if (isArc) updateArcPreview();
 }
 
 function stopAutomation() {
@@ -751,7 +869,7 @@ modeToggle.addEventListener("change", function () {
 	}
 });
 
-startAutomationBt.addEventListener("click", startAutomation);
+startAutomationBt.addEventListener("click", startSelectedAutomation);
 stopAutomationBt.addEventListener("click", stopAutomation);
 startRecordingBt.addEventListener("click", startManualRecording);
 stopRecordingBt.addEventListener("click", stopManualRecording);
@@ -760,6 +878,10 @@ speedSlider.addEventListener("input", (e) => {
 	speedValueEl.textContent = e.target.value;
 })
 addPointBtn.addEventListener("click", addPointRow);
+pathModeEl.addEventListener("change", updatePathMode);
+[arcCenterXEl, arcCenterYEl, arcZEl, arcRadiusEl].forEach(element => {
+	element.addEventListener("input", updateArcPreview);
+});
 deviceUSG.addEventListener("change", () => handleUsgToggle(deviceUSG, deviceUSGStatus));
 trackerIMU.addEventListener("change", () => handleTrackerToggle("imu", trackerIMU, trackerIMUStatus));
 trackerPSMove.addEventListener("change", () => handleTrackerToggle("psmove", trackerPSMove, trackerPSMoveStatus));

@@ -4,10 +4,14 @@ eventlet.monkey_patch()
 from flask import Flask, request, jsonify, send_from_directory, Response
 import cv2
 from uclr_acquisition.config import config
-from uclr_acquisition.experiment import safe_run_automation
+from uclr_acquisition.experiment import (
+    safe_run_automation,
+    safe_run_arc_automation,
+)
 from .record import start_recording, stop_recording, delete_last_recording
 from .utils import build_filename, get_local_ip_address
 import threading
+import math
 import webbrowser
 import argparse
 import os
@@ -286,6 +290,44 @@ def run():
     automation_thread.start()
 
     return jsonify({"status": "started"})
+
+
+@app.route("/run-arc", methods=["POST"])
+def run_arc():
+    """Start the fixed 180-degree circular-arc acquisition mode."""
+    global automation_thread, stop_event
+    print("Received run-arc/POST request")
+    params = request.get_json(force=True)
+    print(f'With params: {params}')
+
+    required = (
+        "speed", "iterations", "centerX", "centerY", "z", "radius"
+    )
+    if not all(param in params for param in required):
+        return jsonify({"error": "Missing arc parameters"}), 400
+
+    stop_event.clear()
+    automation_thread = threading.Thread(
+        target=safe_run_arc_automation,
+        kwargs=dict(
+            center_x=params["centerX"],
+            center_y=params["centerY"],
+            z_fixed=params["z"],
+            radius=params["radius"],
+            speed=params["speed"],
+            description=params.get("description", ""),
+            num_iterations=params["iterations"],
+            num_repetitions=params.get("repetitions", 1),
+            initial_sleep_time=params.get("initialSleepTime", 3),
+            sleep_time=params.get("sleepTime", 3),
+            stop_event=stop_event,
+            socketio_instance=socketio,
+        ),
+        daemon=True,
+    )
+    automation_thread.start()
+
+    return jsonify({"status": "started", "mode": "arc180"})
 
 @app.route("/stop", methods=['POST'])
 def stop():
