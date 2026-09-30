@@ -419,7 +419,6 @@ def remux_webm_in_background(file_path):
     tpool.execute(remux_webm, file_path)
 
 
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Web browser interface for synchronous acquisition of audio "
                                                  "(from rasberry_pi/banana_pi devboard) and video from webcam")

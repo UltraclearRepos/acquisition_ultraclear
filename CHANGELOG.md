@@ -3,11 +3,21 @@
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [0.7.0]
+## [0.8.0] - 2026-09-30
+### Added
+- Camera upload completion signaling between the browser and backend
+- Background WebM remuxing to finalize recording duration and container metadata
+
+### Changed
+- Request and validate an exact camera frame rate of 15 FPS
+- Wait for all enabled camera recordings to be saved before completing `stop_recording`
+- Disable a camera and notify the user when its stream cannot be configured correctly
+
+## [0.7.0] - 2026-09-01
 ### Added
 - arc movement dobot mode
 
-## [0.6.0]
+## [0.6.0] - 2026-08-12
 ### Added
 - Annotation tool for audio based on video
 
