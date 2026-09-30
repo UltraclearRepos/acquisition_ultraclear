@@ -48,6 +48,9 @@ let recordingStartTime = null;
 let recordingTimerInterval = null;
 let sharedAudioTrack = null;
 let camStartTimestamp = null;
+let currentRecordingId = null;
+let pendingCameraUploads = 0;
+let cameraUploadErrors = [];
 
 const automationForm = document.getElementById("automationForm");
 const initialSleepTimeEl = document.getElementById("initialSleepTime");
@@ -84,18 +87,19 @@ socket.on("connect", () => {
 	console.log("Socket.io connected from browser")
 })
 
-socket.on("record", async (msg) => {
+socket.on("record", (msg) => {
 
 	const action = msg.action;
 	const filename = msg.filename;
 	console.log(action);
 
-	if (!localStream && !localStream2) {
-		console.warn("No media stream available to record");
-		return;
-	}
-
 	if (action === "start") {
+		currentRecordingId = msg.recordingId;
+
+		if (!localStream && !localStream2) {
+			console.warn("No media stream available to record");
+			return;
+		}
 
 		const starts = [];
 
@@ -128,24 +132,39 @@ socket.on("record", async (msg) => {
 
 	console.log(mediaRecorder, mediaRecorder2);
 	if (action === "stop") {
+
+		currentRecordingId = msg.recordingId || currentRecordingId;
+
 		const isRecording1 = mediaRecorder && mediaRecorder.state === "recording";
 		const isRecording2 = mediaRecorder2 && mediaRecorder2.state === "recording";
 
-		if (isRecording1 || isRecording2) {
-			shouldUpload = msg.shouldUpload;
-			if (!shouldUpload) {
-				alert("Recording is not saved!")
-			}
+		shouldUpload = msg.shouldUpload;
+		cameraUploadErrors = [];
 
-			if (isRecording1) mediaRecorder.requestData();
-			if (isRecording2) mediaRecorder2.requestData();
+		pendingCameraUploads = Number(isRecording1) + Number(isRecording2);
 
-			Promise.resolve().then(() => {
-				if (isRecording1) mediaRecorder.stop();
-				if (isRecording2) mediaRecorder2.stop();
-				console.log("Browser stopped recording");
-			});
+		if (!shouldUpload) {
+			alert("Recording is not saved!")
 		}
+
+		if (pendingCameraUploads === 0) {
+			socket.emit("camera-uploads-complete", {
+				recordingId: currentRecordingId,
+				success: true,
+				message: ""
+			});
+			return;
+		}
+
+		if (isRecording1) {
+			mediaRecorder.stop();
+		}
+
+		if (isRecording2) {
+			mediaRecorder2.stop();
+		}
+
+		console.log("Browser stopped recording, pending uploads: ", pendingCameraUploads);
 	}
 
 });
@@ -172,7 +191,20 @@ socket.on("iteration", (msg) => {
 	iterationCounterEl.textContent = `Iteration: ${currentIteration} / ${maxIterations}`;
 });
 
+function cameraUploadFinished(error = null) {
+	if (error) {
+		cameraUploadErrors.push(error.message || String(error));
+	}
 
+	pendingCameraUploads--;
+	if(pendingCameraUploads === 0) {
+		socket.emit("camera-uploads-complete", {
+			recordingId: currentRecordingId,
+			success: cameraUploadErrors.length === 0,
+			message: cameraUploadErrors.join("; ")
+		});
+	}
+}
 
 function addSuffix(filename, suffix) {
 	const dotIndex = filename.lastIndexOf('.');
@@ -200,20 +232,34 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 	recorder.onstop = async () => {
 		console.log('stopping');
 
-		if (shouldUpload) {
-			const blob = new Blob(chunks, { type: "video/webm" });
-			const formData = new FormData();
-			formData.append("file", blob, filename);
-			if (camStartTimestamp !== null) {
-				formData.append("start_timestamp", camStartTimestamp);
-			}
+		let uploadError = null;
 
-			await fetch("/upload", {
-				method: "POST",
-				body: formData
-			});
-		} else {
-			console.warn("Backend forced not to upload video");
+		try {
+			if (shouldUpload) {
+				const blob = new Blob(chunks, { type: "video/webm" });
+				const formData = new FormData();
+				formData.append("file", blob, filename);
+
+				if (camStartTimestamp !== null) {
+					formData.append("start_timestamp", camStartTimestamp);
+				}
+
+				const response = await fetch("/upload", {
+					method: "POST",
+					body: formData
+				});
+
+				if (!response.ok) {
+					throw new Error(`Upload of ${filename} failed with status ${response.status}`);
+				}
+			} else {
+				console.warn("Backend forced not to upload video");
+			}
+		} catch (error) {
+			uploadError = error;
+			console.error(`Error uploading ${filename}:`, error);
+		} finally {
+			cameraUploadFinished(uploadError);
 		}
 
 	};

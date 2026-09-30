@@ -4,8 +4,15 @@ from uclr_acquisition.runtime_config import runtime_config
 from uclr_acquisition.sound import play_chirp_signal
 import time
 import os
+import threading
 
 filename_prefix = None
+CAMERA_UPLOAD_TIMEOUT_SECONDS = 120
+
+camera_uploads_finished = threading.Event()
+camera_upload_success = True
+camera_upload_message = None
+camera_upload_recording_id = None
 
 def start_recording(output_filename_prefix, socketio_instance):
     global filename_prefix
@@ -33,6 +40,8 @@ def start_recording(output_filename_prefix, socketio_instance):
 
     filename_prefix = output_filename_prefix
 
+    prepare_camera_upload_wait(output_filename_prefix)
+
     video_filename = f"{output_filename_prefix}.webm"
 
     if runtime_config['usg_enabled'] and sensors.usg_scanner:
@@ -58,7 +67,8 @@ def start_recording(output_filename_prefix, socketio_instance):
 
     socketio_instance.emit("record", {
         "action": "start",
-        "filename": video_filename
+        "filename": video_filename,
+        "recordingId": output_filename_prefix
     })
 
     time.sleep(0.3)
@@ -73,9 +83,12 @@ def start_recording(output_filename_prefix, socketio_instance):
 def stop_recording(socketio_instance):
     global filename_prefix
 
+    recording_id = filename_prefix
+
     socketio_instance.emit("record", {
         "action": "stop",
-        "shouldUpload": True
+        "shouldUpload": True,
+        "recordingId": recording_id
     })
     time.sleep(0.3)
 
@@ -115,14 +128,29 @@ def stop_recording(socketio_instance):
             mems_error = str(exc)
             print(f"Failed to download MEMS recording: {exc}")
 
+    camera_ok, camera_error = wait_for_camera_uploads()
+
+    errors = []
+
+    if mems_error:
+        errors.append(mems_error)
+
+    if not camera_ok:
+        errors.append(camera_error)
+
     filename_prefix = None
-    return mems_error is None, mems_error
+
+    if errors:
+        return False, "; ".join(errors)
+
+    return True, None
 
 def kill_recording(socketio_instance):
     global filename_prefix
     socketio_instance.emit("record", {
         "action": "stop",
-        "shouldUpload": False
+        "shouldUpload": False,
+        "recordingId": filename_prefix
     })
     if sensors.usg_scanner and sensors.usg_scanner.is_initialized:
         sensors.usg_scanner.kill_recording()
@@ -132,6 +160,40 @@ def kill_recording(socketio_instance):
     if sensors.mems_microphone:
         sensors.mems_microphone.kill_recording()
     filename_prefix = None
+
+
+def prepare_camera_upload_wait(recording_id):
+    global camera_upload_success
+    global camera_upload_message
+    global camera_upload_recording_id
+
+    camera_upload_recording_id = recording_id
+    camera_upload_success = True
+    camera_upload_message = None
+    camera_uploads_finished.clear()
+
+def notify_camera_upload_complete(recording_id, success, message=None):
+    global camera_upload_success
+    global camera_upload_message
+
+    if recording_id != camera_upload_recording_id:
+        return False
+
+    camera_upload_success = bool(success)
+    camera_upload_message = message
+    camera_uploads_finished.set()
+    return True
+
+def wait_for_camera_uploads():
+    completed = camera_uploads_finished.wait(timeout=CAMERA_UPLOAD_TIMEOUT_SECONDS)
+
+    if not completed:
+        return False, "Camera uploads did not complete within the expected time."
+
+    if not camera_upload_success:
+        return False, camera_upload_message or "Camera uploads failed."
+
+    return True, None
 
 
 def delete_last_recording():

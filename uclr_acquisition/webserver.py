@@ -8,7 +8,7 @@ from uclr_acquisition.experiment import (
     safe_run_automation,
     safe_run_arc_automation,
 )
-from .record import start_recording, stop_recording, delete_last_recording
+from .record import start_recording, stop_recording, delete_last_recording, notify_camera_upload_complete
 from .utils import build_filename, get_local_ip_address
 import threading
 import math
@@ -37,6 +37,17 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 automation_thread = None
 stop_event = threading.Event()
 
+
+@socketio.on("camera-uploads-complete")
+def handle_camera_upload_complete(data):
+    accepted = notify_camera_upload_complete(
+        recording_id=data.get("recordingId"),
+        success=data.get("success", False),
+        message=data.get("message")
+    )
+
+    if not accepted:
+        print(f"Received camera-uploads-complete for unknown recordingId: {data.get('recordingId')}")
 
 @app.route("/upload", methods=['POST'])
 def upload_video():
