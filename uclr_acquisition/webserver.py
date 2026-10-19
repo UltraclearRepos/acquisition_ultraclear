@@ -1,14 +1,16 @@
 import eventlet
 eventlet.monkey_patch()
+from eventlet import tpool
 
 from flask import Flask, request, jsonify, send_from_directory, Response
+import subprocess
 import cv2
 from uclr_acquisition.config import config
 from uclr_acquisition.experiment import (
     safe_run_automation,
     safe_run_arc_automation,
 )
-from .record import start_recording, stop_recording, delete_last_recording
+from .record import start_recording, stop_recording, delete_last_recording, notify_camera_upload_complete
 from .utils import build_filename, get_local_ip_address
 import threading
 import math
@@ -38,6 +40,17 @@ automation_thread = None
 stop_event = threading.Event()
 
 
+@socketio.on("camera-uploads-complete")
+def handle_camera_upload_complete(data):
+    accepted = notify_camera_upload_complete(
+        recording_id=data.get("recordingId"),
+        success=data.get("success", False),
+        message=data.get("message")
+    )
+
+    if not accepted:
+        print(f"Received camera-uploads-complete for unknown recordingId: {data.get('recordingId')}")
+
 @app.route("/upload", methods=['POST'])
 def upload_video():
     print(f'Received upload request')
@@ -65,6 +78,8 @@ def upload_video():
                 f.write("source,start_timestamp\n")
                 f.write(f"cam1_cam2,{start_timestamp}\n")
             print(f"Camera start timestamp saved to {video_ts_path}")
+
+    socketio.start_background_task(remux_webm_in_background, file_path)
 
     return jsonify({"status": "ok", "filename": filename})
 
@@ -366,6 +381,43 @@ def post_delete_last_recording():
     if message == "":
         return jsonify({"status": "not found", "message": "No recordings to delete."})
     return jsonify({"status": "ok", "message": message})
+
+def remux_webm(file_path):
+    source_path = Path(file_path)
+    temporary_path = source_path.with_name(f"{source_path.stem}_remuxing{source_path.suffix}")
+
+    command = [
+        "ffmpeg",
+        "-loglevel", "error",
+        "-y",
+        "-i", str(source_path),
+        "-map", "0",
+        "-c", "copy",
+        str(temporary_path),
+    ]
+
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+
+        if not source_path.exists():
+            temporary_path.unlink(missing_ok=True)
+            print(f" Original video was removed before remux finished: {source_path}")
+            return
+
+        os.replace(temporary_path, source_path)
+        print(f"WebM metadata finalized: {source_path}")
+
+    except subprocess.CalledProcessError as exc:
+        temporary_path.unlink(missing_ok=True)
+        print(f"FFmpeg failed to remux {source_path}: {exc.stderr}")
+
+    except Exception as exc:
+        temporary_path.unlink(missing_ok=True)
+        print(f"Unexpected error during remuxing {source_path}: {exc}")
+
+def remux_webm_in_background(file_path):
+    tpool.execute(remux_webm, file_path)
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Web browser interface for synchronous acquisition of audio "

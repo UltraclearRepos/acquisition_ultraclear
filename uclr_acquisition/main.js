@@ -48,6 +48,9 @@ let recordingStartTime = null;
 let recordingTimerInterval = null;
 let sharedAudioTrack = null;
 let camStartTimestamp = null;
+let currentRecordingId = null;
+let pendingCameraUploads = 0;
+let cameraUploadErrors = [];
 
 const automationForm = document.getElementById("automationForm");
 const initialSleepTimeEl = document.getElementById("initialSleepTime");
@@ -76,23 +79,27 @@ const trackerPSMoveStatus = document.getElementById("trackerPSMoveStatus");
 const deviceMEMSStatus = document.getElementById("deviceMEMSStatus");
 const usgStream = document.getElementById("usgStream");
 
+const TARGET_CAMERA_FPS = 15;
+const FPS_TOLERANCE = 0.01;
+
 const socket = io();
 socket.on("connect", () => {
 	console.log("Socket.io connected from browser")
 })
 
-socket.on("record", async (msg) => {
+socket.on("record", (msg) => {
 
 	const action = msg.action;
 	const filename = msg.filename;
 	console.log(action);
 
-	if (!localStream && !localStream2) {
-		console.warn("No media stream available to record");
-		return;
-	}
-
 	if (action === "start") {
+		currentRecordingId = msg.recordingId;
+
+		if (!localStream && !localStream2) {
+			console.warn("No media stream available to record");
+			return;
+		}
 
 		const starts = [];
 
@@ -125,24 +132,39 @@ socket.on("record", async (msg) => {
 
 	console.log(mediaRecorder, mediaRecorder2);
 	if (action === "stop") {
+
+		currentRecordingId = msg.recordingId || currentRecordingId;
+
 		const isRecording1 = mediaRecorder && mediaRecorder.state === "recording";
 		const isRecording2 = mediaRecorder2 && mediaRecorder2.state === "recording";
 
-		if (isRecording1 || isRecording2) {
-			shouldUpload = msg.shouldUpload;
-			if (!shouldUpload) {
-				alert("Recording is not saved!")
-			}
+		shouldUpload = msg.shouldUpload;
+		cameraUploadErrors = [];
 
-			if (isRecording1) mediaRecorder.requestData();
-			if (isRecording2) mediaRecorder2.requestData();
+		pendingCameraUploads = Number(isRecording1) + Number(isRecording2);
 
-			Promise.resolve().then(() => {
-				if (isRecording1) mediaRecorder.stop();
-				if (isRecording2) mediaRecorder2.stop();
-				console.log("Browser stopped recording");
-			});
+		if (!shouldUpload) {
+			alert("Recording is not saved!")
 		}
+
+		if (pendingCameraUploads === 0) {
+			socket.emit("camera-uploads-complete", {
+				recordingId: currentRecordingId,
+				success: true,
+				message: ""
+			});
+			return;
+		}
+
+		if (isRecording1) {
+			mediaRecorder.stop();
+		}
+
+		if (isRecording2) {
+			mediaRecorder2.stop();
+		}
+
+		console.log("Browser stopped recording, pending uploads: ", pendingCameraUploads);
 	}
 
 });
@@ -169,7 +191,20 @@ socket.on("iteration", (msg) => {
 	iterationCounterEl.textContent = `Iteration: ${currentIteration} / ${maxIterations}`;
 });
 
+function cameraUploadFinished(error = null) {
+	if (error) {
+		cameraUploadErrors.push(error.message || String(error));
+	}
 
+	pendingCameraUploads--;
+	if(pendingCameraUploads === 0) {
+		socket.emit("camera-uploads-complete", {
+			recordingId: currentRecordingId,
+			success: cameraUploadErrors.length === 0,
+			message: cameraUploadErrors.join("; ")
+		});
+	}
+}
 
 function addSuffix(filename, suffix) {
 	const dotIndex = filename.lastIndexOf('.');
@@ -197,20 +232,34 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 	recorder.onstop = async () => {
 		console.log('stopping');
 
-		if (shouldUpload) {
-			const blob = new Blob(chunks, { type: "video/webm" });
-			const formData = new FormData();
-			formData.append("file", blob, filename);
-			if (camStartTimestamp !== null) {
-				formData.append("start_timestamp", camStartTimestamp);
-			}
+		let uploadError = null;
 
-			await fetch("/upload", {
-				method: "POST",
-				body: formData
-			});
-		} else {
-			console.warn("Backend forced not to upload video");
+		try {
+			if (shouldUpload) {
+				const blob = new Blob(chunks, { type: "video/webm" });
+				const formData = new FormData();
+				formData.append("file", blob, filename);
+
+				if (camStartTimestamp !== null) {
+					formData.append("start_timestamp", camStartTimestamp);
+				}
+
+				const response = await fetch("/upload", {
+					method: "POST",
+					body: formData
+				});
+
+				if (!response.ok) {
+					throw new Error(`Upload of ${filename} failed with status ${response.status}`);
+				}
+			} else {
+				console.warn("Backend forced not to upload video");
+			}
+		} catch (error) {
+			uploadError = error;
+			console.error(`Error uploading ${filename}:`, error);
+		} finally {
+			cameraUploadFinished(uploadError);
 		}
 
 	};
@@ -276,7 +325,8 @@ function getDevices(deviceInfos) {
 }
 
 function handleError(error) {
-	console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
+	console.error(error.message, error.name);
+	alert(`${error.name}: ${error.message}`);
 }
 
 function waitTrackLive(track) {
@@ -325,25 +375,65 @@ async function getSharedAudioTrack() {
 
 }
 
+function stopSharedAudioTrackIfUnused() {
+	if (!sharedAudioTrack) return;
+
+	const audioIsUsed = [localStream, localStream2].some(stream =>
+		stream?.getAudioTracks().includes(sharedAudioTrack)
+	);
+
+	if (!audioIsUsed) {
+		sharedAudioTrack.stop();
+		sharedAudioTrack = null;
+	}
+}
+
 async function buildComposedStream(videoDeviceId, targetWidth, targetHeight) {
-	const audioTrack = await getSharedAudioTrack();
+
+	const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+
+	if (!supportedConstraints.frameRate) {
+		throw new Error("Browser does not support frameRate constraint.");
+	}
+
 	const videoStream = await navigator.mediaDevices.getUserMedia({
 		video: {
 			deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
 			width: { exact: targetWidth },
 			height: { exact: targetHeight },
-			frameRate: 30
+			frameRate: { exact: TARGET_CAMERA_FPS }
 		},
 		audio: false
 	});
-	const videoTrack = videoStream.getVideoTracks()[0];
 
-	const tracks = [videoTrack];
-	if (audioTrack) {
-		tracks.push(audioTrack);
+	const videoTrack = videoStream.getVideoTracks()[0];
+	const settings = videoTrack.getSettings();
+	const actualFPS = settings.frameRate;
+
+	if (
+		!Number.isFinite(actualFPS) ||
+		Math.abs(actualFPS - TARGET_CAMERA_FPS) > FPS_TOLERANCE
+	) {
+		videoStream.getTracks().forEach(t => t.stop());
+		throw new Error(`Camera does not support the target FPS of ${TARGET_CAMERA_FPS}. Actual FPS: ${actualFPS}`);
 	}
-	const composed = new MediaStream(tracks);
-	return { composed, videoTrack }
+
+	// Add audio track if available
+	try {
+		const tracks = [videoTrack];
+		const audioTrack = await getSharedAudioTrack();
+
+		if (audioTrack) {
+			tracks.push(audioTrack);
+		}
+
+		const composed = new MediaStream(tracks);
+		return { composed, videoTrack };
+	} catch (error) {
+		videoStream.getTracks().forEach(t => t.stop());
+		throw error;
+	}
+
 }
 
 // https://github.com/webrtc/samples/tree/gh-pages/src/content/devices/input-output
@@ -358,6 +448,7 @@ async function startFirstCamera() {
 				liveVideoElement.srcObject = null;
 				resVideo1El.textContent = "";
 			}
+			stopSharedAudioTrackIfUnused();
 			return;
 		}
 		if (localStream) {
@@ -372,8 +463,19 @@ async function startFirstCamera() {
 		await waitVideoPlaying(liveVideoElement);
 
 		const settings = videoTrack.getSettings();
-		resVideo1El.textContent = `Cam 1: ${settings.width}x${settings.height}`;
+		resVideo1El.textContent = `Cam 1: ${settings.width}x${settings.height} @ ${settings.frameRate} FPS`;
 	} catch (e) {
+
+		if (localStream) {
+			localStream.getVideoTracks().forEach(t => t.stop());
+		}
+
+		localStream = null;
+		liveVideoElement.srcObject = null;
+		videoSelect.value = "none";
+		resVideo1El.textContent = "";
+		stopSharedAudioTrackIfUnused();
+
 		handleError(e);
 	}
 
@@ -389,6 +491,7 @@ async function startSecondCamera() {
 				liveVideoElement2.srcObject = null;
 				resVideo2El.textContent = "";
 			}
+			stopSharedAudioTrackIfUnused();
 			return;
 		}
 		if (localStream2) {
@@ -397,8 +500,11 @@ async function startSecondCamera() {
 			liveVideoElement2.srcObject = null;
 		}
 		if (videoSource2 === videoSelect.value) {
-			console.warn("Second camera uses the same device as the first. Skipping to avoid timeout.");
+			videoSelect2.value = "none";
 			resVideo2El.textContent = "";
+
+			handleError(new Error("Camera 2 cannot be the same as Camera 1."));
+
 			return;
 		}
 		const { composed, videoTrack } = await buildComposedStream(videoSource2, 1920, 1080);
@@ -408,8 +514,18 @@ async function startSecondCamera() {
 		await waitVideoPlaying(liveVideoElement2);
 
 		const settings = videoTrack.getSettings();
-		resVideo2El.textContent = `Cam 2: ${settings.width}x${settings.height}`;
+		resVideo2El.textContent = `Cam 2: ${settings.width}x${settings.height} @ ${settings.frameRate} FPS`;
 	} catch (e) {
+
+		if (localStream2) {
+			localStream2.getVideoTracks().forEach(t => t.stop());
+		}
+		localStream2 = null;
+		liveVideoElement2.srcObject = null;
+		videoSelect2.value = "none";
+		resVideo2El.textContent = "";
+		stopSharedAudioTrackIfUnused();
+
 		handleError(e);
 	}
 }
