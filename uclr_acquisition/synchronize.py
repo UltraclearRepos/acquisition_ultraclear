@@ -450,14 +450,20 @@ def process_recording(name, videos, root_dir, audio_dir, delays, audio_channel):
         remove_audio_offset(video)
 
     video_with_audio = videos_with_audio[0] if videos_with_audio else None
-    for audio_path in find_matching_files(audio_dir, name):
-        if video_with_audio is None:
-            print(
-                f"Audio unchanged: no embedded camera audio for "
-                f"{audio_path.name}"
-            )
-            continue
-        trim_audio_to_video(audio_path, video_with_audio, audio_channel)
+
+    audio_path = audio_dir / f"{name}.wav"
+    if not audio_path.is_file():
+        print(f"Audio unchanged: no raw audio for {name}")
+        return
+
+    if video_with_audio is None:
+        print(
+            f"Audio unchanged: no embedded camera audio for "
+            f"{audio_path.name}"
+        )
+        return
+
+    trim_audio_to_video(audio_path, video_with_audio, audio_channel)
 
 
 def parse_args():
