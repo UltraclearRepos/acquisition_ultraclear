@@ -33,6 +33,8 @@ setup(
             'uclr_acquisition=uclr_acquisition.webserver:main',
             'uclr_sync=uclr_acquisition.synchronize:main',
             'uclr_annotate=uclr_acquisition.annotation.video_annotation:main',
+            'uclr_annotate_positions=uclr_acquisition.annotation.track_position:main',
+            'uclr_review_annotations=uclr_acquisition.annotation.review_annotations:main',
         ],
     }
 )

@@ -1,4 +1,4 @@
-from .config import config
+from .config import AUDIO_RAW_DIR, CAMERA_VIDEO_DIRS
 from uclr_acquisition import sensors, trackers
 from uclr_acquisition.runtime_config import runtime_config
 from uclr_acquisition.sound import play_chirp_signal
@@ -199,27 +199,26 @@ def wait_for_camera_uploads():
 def delete_last_recording():
     all_files = {}
 
-    def scan_folder(folder, is_suffix_type):
+    def scan_folder(folder):
         if not os.path.exists(folder):
             return
         for file in os.listdir(folder):
             parts = file.split("_")
             try:
-                if is_suffix_type:
-                    time_part = parts[-3] + "." + parts[-2]
-                else:
-                    time_part = parts[-2] + "." + ".".join(parts[-1].split(".")[:3])
+                time_part = parts[-2] + "." + ".".join(parts[-1].split(".")[:3])
                 timestamp = time.strptime(time_part, '%Y-%m-%d.%H.%M.%S')
                 file_path = os.path.join(folder, file)
                 all_files.setdefault(timestamp, []).append((folder, file_path))
             except Exception:
                 pass
 
-    scan_folder('videos', True)
-    for f in ['usg', 'usg_timestamps', 'video_timestamps', 'dobot', 'imu', 'psmove']:
-        scan_folder(f, False)
-    audio_folder = config["local_dir"]
-    scan_folder(audio_folder, False)
+    cam1_folder = CAMERA_VIDEO_DIRS["cam1"]
+    cam2_folder = CAMERA_VIDEO_DIRS["cam2"]
+    audio_folder = AUDIO_RAW_DIR
+    for f in [
+            cam1_folder, cam2_folder, 'usg', 'usg_timestamps',
+            'video_timestamps', 'dobot', 'imu', 'psmove', audio_folder]:
+        scan_folder(f)
 
     if not all_files:
         return ""
@@ -237,7 +236,8 @@ def delete_last_recording():
 
     parts = []
     folder_mapping = {
-        'videos': 'Video',
+        cam1_folder: 'VideoCam1',
+        cam2_folder: 'VideoCam2',
         'usg': 'USG',
         'video_timestamps': 'VideoTimestamps',
         'usg_timestamps': 'USGTimestamps',
@@ -248,8 +248,8 @@ def delete_last_recording():
     }
     
     for f in [
-            'videos', 'usg', 'video_timestamps', 'usg_timestamps',
-            'dobot', 'imu', 'psmove', audio_folder]:
+            cam1_folder, cam2_folder, 'usg', 'video_timestamps',
+            'usg_timestamps', 'dobot', 'imu', 'psmove', audio_folder]:
         if f in deleted_folders:
             parts.append(folder_mapping[f])
             

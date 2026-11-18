@@ -1,3 +1,4 @@
+import argparse
 import csv
 import os
 import subprocess
@@ -8,12 +9,7 @@ import numpy as np
 from scipy.io import wavfile
 from scipy.signal import correlate2d, stft
 
-
-# Run the command from the acquisition directory containing videos/,
-# micro_data/ and the timestamped sensor-data folders.
-ROOT_DIR = Path.cwd()
-VIDEO_DIR = ROOT_DIR / "videos"
-MICRO_DATA_DIR = ROOT_DIR / "micro_data"
+from uclr_acquisition.config import AUDIO_RAW_DIR, CAMERA_VIDEO_DIRS
 
 # One convention for every device:
 # delay = device_time - camera_time
@@ -157,7 +153,7 @@ def remove_audio_offset(video_path):
     audio_offset = audio_start - video_start
 
     if abs(audio_offset) < AUDIO_OFFSET_TOLERANCE_S:
-        print(f"Video: {video_path.name}, no audio offset")
+        print(f"Video: {video_path.parent.name}/{video_path.name}, no audio offset")
         return
 
     temporary_path = video_path.with_name(
@@ -207,7 +203,7 @@ def remove_audio_offset(video_path):
 
     temporary_path.replace(video_path)
     print(
-        f"Video: {video_path.name}, audio shifted by "
+        f"Video: {video_path.parent.name}/{video_path.name}, audio shifted by "
         f"{-audio_offset * 1000:.2f} ms"
     )
 
@@ -314,14 +310,6 @@ def find_delay_by_sync(
     return audio_shift / audio_fs - video_shift / video_fs
 
 
-def recording_name(video_path):
-    name = video_path.stem
-    for suffix in ("_cam1", "_cam2"):
-        if name.endswith(suffix):
-            return name[:-len(suffix)]
-    return name
-
-
 def timestamp_delays():
     return {
         "dobot": DOBOT_CAMERA_DELAY_S,
@@ -381,12 +369,12 @@ def correct_csv(path, delay):
     print(f"CSV: {path}, delay={delay * 1000:.2f} ms")
 
 
-def trim_audio_to_video(audio_path, video_path):
+def trim_audio_to_video(audio_path, video_path, audio_channel):
     """Cut the WAV so it starts and ends together with the video."""
     delay = find_delay_by_sync(
         str(video_path),
         str(audio_path),
-        AUDIO_CHANNEL,
+        audio_channel,
         VIDEO_AUDIO_CHANNEL,
     )
 
@@ -445,50 +433,87 @@ def trim_audio_to_video(audio_path, video_path):
     )
 
 
-def process_recording(name, videos, delays):
+def process_recording(name, videos, root_dir, audio_dir, delays, audio_channel):
     print(f"\nRecording: {name}")
 
     for folder_name, delay in delays.items():
-        source_dir = ROOT_DIR / folder_name
+        source_dir = root_dir / folder_name
 
         for source in find_matching_files(source_dir, name):
             correct_csv(source, delay)
 
+    # videos are ordered cam1, cam2, so cam1 is the reference when it has audio
     videos_with_audio = [
-        video for video in sorted(videos) if has_audio_stream(video)
+        video for video in videos if has_audio_stream(video)
     ]
     for video in videos_with_audio:
         remove_audio_offset(video)
 
     video_with_audio = videos_with_audio[0] if videos_with_audio else None
-    for audio_path in find_matching_files(MICRO_DATA_DIR, name):
+    for audio_path in find_matching_files(audio_dir, name):
         if video_with_audio is None:
             print(
                 f"Audio unchanged: no embedded camera audio for "
                 f"{audio_path.name}"
             )
             continue
-        trim_audio_to_video(audio_path, video_with_audio)
+        trim_audio_to_video(audio_path, video_with_audio, audio_channel)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Synchronize sensor data timestamps and Raspberry Pi MEMS audio "
+            "with camera recordings."
+        )
+    )
+    parser.add_argument(
+        "--root-dir",
+        type=Path,
+        default=Path.cwd(),
+        help=(
+            "Directory containing video_cam1/, video_cam2/, audio_raw/ and "
+            "sensor data folders (default: current directory)."
+        ),
+    )
+    parser.add_argument(
+        "--audio-channel",
+        type=int,
+        required=True,
+        help=(
+            "Audio channel to use for synchronization"
+        ),
+    )
+    return parser.parse_args()
 
 
 def main():
     delays = timestamp_delays()
     recordings = {}
+    args = parse_args()
 
-    if not VIDEO_DIR.is_dir():
+    root_dir = args.root_dir
+    video_dirs = [root_dir / folder for folder in CAMERA_VIDEO_DIRS.values()]
+    audio_dir = root_dir / AUDIO_RAW_DIR
+
+    if not any(video_dir.is_dir() for video_dir in video_dirs):
         raise FileNotFoundError(
-            f"Video directory does not exist: {VIDEO_DIR}"
+            "Video directories do not exist: "
+            + ", ".join(str(video_dir) for video_dir in video_dirs)
         )
 
-    for video_path in sorted(VIDEO_DIR.iterdir()):
-        if not video_path.is_file():
+    for video_dir in video_dirs:
+        if not video_dir.is_dir():
             continue
 
-        name = recording_name(video_path)
-        recordings.setdefault(name, []).append(video_path)
+        for video_path in sorted(video_dir.iterdir()):
+            if not video_path.is_file():
+                continue
+
+            recordings.setdefault(video_path.stem, []).append(video_path)
 
     for name in sorted(recordings):
-        process_recording(name, recordings[name], delays)
+        process_recording(name, recordings[name], root_dir, audio_dir, delays, args.audio_channel)
 
     print("\nFinished.")
 
