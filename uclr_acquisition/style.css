@@ -556,7 +556,7 @@ input[type="range"] {
     margin-top: 4px;
 }
 
-.movement-type-selector {
+.automation-mode-selector {
     margin-top: 10px;
     padding: 10px;
     gap: 7px;
@@ -567,13 +567,13 @@ input[type="range"] {
     box-shadow: 0 2px 7px rgba(40, 127, 141, 0.12);
 }
 
-.movement-type-selector label {
+.automation-mode-selector label {
     color: #176776;
     font-size: 13px;
     letter-spacing: 0.02em;
 }
 
-#pathMode {
+#automationMode {
     min-height: 38px;
     border: 2px solid #6eabb5;
     background-color: #fff;
@@ -584,11 +584,11 @@ input[type="range"] {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-#pathMode:hover {
+#automationMode:hover {
     border-color: #287f8d;
 }
 
-#pathMode:focus {
+#automationMode:focus {
     border-color: #176776;
     outline: none;
     box-shadow: 0 0 0 3px rgba(40, 127, 141, 0.2);

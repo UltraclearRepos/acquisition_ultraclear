@@ -71,7 +71,7 @@ def start_recording(output_filename_prefix, socketio_instance):
         "recordingId": output_filename_prefix
     })
 
-    time.sleep(0.3)
+    time.sleep(0.5)
     if mems_started and not play_chirp_signal():
         error = "The synchronization chirp could not be played."
         print(error)

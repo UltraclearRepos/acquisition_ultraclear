@@ -7,6 +7,9 @@
 const iterEl = document.getElementById("iterations");
 const repetitionsEl = document.getElementById("repetitions")
 const descriptionEl = document.getElementById("description");
+const materialEl = document.getElementById("material");
+const needleTypeEl = document.getElementById("needleType");
+const sensorVersionEl = document.getElementById("sensorVersion");
 const startAutomationBt = document.getElementById("startTests");
 const stopAutomationBt = document.getElementById("stopTests");
 const automationStatusEl = document.getElementById("automationStatus");
@@ -25,6 +28,7 @@ const speedValueEl = document.getElementById("speedValue");
 const timerEl = document.getElementById("recordingTimer");
 
 const audioInputSelect = document.getElementById("audioSource");
+const videoProfileEl = document.getElementById("videoProfile");
 const videoSelect = document.getElementById("videoSource");
 const videoSelect2 = document.getElementById("videoSource2");
 const selectors = [audioInputSelect, videoSelect, videoSelect2];
@@ -57,7 +61,7 @@ const initialSleepTimeEl = document.getElementById("initialSleepTime");
 const sleepTimeEl = document.getElementById("sleepTime");
 const pointsContainer = document.getElementById("pointsContainer");
 const addPointBtn = document.getElementById("addPointBtn");
-const pathModeEl = document.getElementById("pathMode");
+const automationModeEl = document.getElementById("automationMode");
 const pointsPathForm = document.getElementById("pointsPathForm");
 const arcPathForm = document.getElementById("arcPathForm");
 const arcCenterXEl = document.getElementById("arcCenterX");
@@ -65,6 +69,19 @@ const arcCenterYEl = document.getElementById("arcCenterY");
 const arcZEl = document.getElementById("arcZ");
 const arcRadiusEl = document.getElementById("arcRadius");
 const arcPointsPreviewEl = document.getElementById("arcPointsPreview");
+const upDownForm = document.getElementById("upDownForm");
+const upDownInitXEl = document.getElementById("upDownInitX");
+const upDownFinishXEl = document.getElementById("upDownFinishX");
+const upDownYEl = document.getElementById("upDownY");
+const upDownREl = document.getElementById("upDownR");
+const upDownUpZEl = document.getElementById("upDownUpZ");
+const upDownDownZEl = document.getElementById("upDownDownZ");
+const upDownIntervalToggleEl = document.getElementById("upDownIntervalToggle");
+const upDownIntervalEl = document.getElementById("upDownInterval");
+const gridForm = document.getElementById("gridForm");
+const iterationsGroup = document.getElementById("iterationsGroup");
+const repetitionsGroup = document.getElementById("repetitionsGroup");
+const initialSleepTimeGroup = document.getElementById("initialSleepTimeGroup");
 const toggleUsgBtn = document.getElementById("toggleUsgBtn");
 
 let isUsgOn = false;
@@ -81,6 +98,30 @@ const usgStream = document.getElementById("usgStream");
 
 const TARGET_CAMERA_FPS = 15;
 const FPS_TOLERANCE = 0.01;
+const VIDEO_PROFILE_STORAGE_KEY = "videoProfile";
+
+// "quality" records VP9 at a high bitrate with exact resolutions and FPS.
+// "performance" records H.264 with the browser default bitrate, 1280x720 and 30 FPS when available.
+const VIDEO_PROFILES = {
+	quality: {
+		codec: "vp9",
+		mimeType: "video/webm; codecs=vp9",
+		videoBitsPerSecond: 100000000,
+		cam1: { width: { exact: 640 }, height: { exact: 360 } },
+		cam2: { width: { exact: 1920 }, height: { exact: 1080 } },
+		frameRate: TARGET_CAMERA_FPS,
+		exactFrameRate: true
+	},
+	performance: {
+		codec: "h264",
+		mimeType: "video/webm; codecs=h264",
+		videoBitsPerSecond: null,
+		cam1: { width: { min: 640, ideal: 1280, max: 1280 }, height: { min: 480, ideal: 720, max: 720 } },
+		cam2: { width: { min: 640, ideal: 1280, max: 1280 }, height: { min: 480, ideal: 720, max: 720 } },
+		frameRate: 30,
+		exactFrameRate: false
+	}
+};
 
 const socket = io();
 socket.on("connect", () => {
@@ -186,9 +227,10 @@ socket.on("automation-status", (msg) => {
 
 socket.on("iteration", (msg) => {
 	const iterInput = iterEl.value;
-	const maxIterations = iterInput ? parseInt(iterInput, 10) || 1 : 1
+	const maxIterations = msg.total || (iterInput ? parseInt(iterInput, 10) || 1 : 1)
 	const currentIteration = msg.iteration;
-	iterationCounterEl.textContent = `Iteration: ${currentIteration} / ${maxIterations}`;
+	const label = msg.label ? ` (${msg.label})` : "";
+	iterationCounterEl.textContent = `Iteration: ${currentIteration} / ${maxIterations}${label}`;
 });
 
 function cameraUploadFinished(error = null) {
@@ -217,11 +259,14 @@ function addSuffix(filename, suffix) {
 function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 
 	const chunks = [];
+	const videoProfile = getVideoProfile();
 
-	const recorder = new MediaRecorder(stream, {
-		mimeType: "video/webm; codecs=vp9",
-		videoBitsPerSecond: 100000000
-	})
+	const recorderOptions = { mimeType: videoProfile.mimeType };
+	if (videoProfile.videoBitsPerSecond) {
+		recorderOptions.videoBitsPerSecond = videoProfile.videoBitsPerSecond;
+	}
+
+	const recorder = new MediaRecorder(stream, recorderOptions)
 
 	recorder.ondataavailable = (event) => {
 		if (event.data.size > 0) {
@@ -239,6 +284,7 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 				const blob = new Blob(chunks, { type: "video/webm" });
 				const formData = new FormData();
 				formData.append("file", blob, filename);
+				formData.append("codec", videoProfile.codec);
 
 				if (camStartTimestamp !== null) {
 					formData.append("start_timestamp", camStartTimestamp);
@@ -388,20 +434,51 @@ function stopSharedAudioTrackIfUnused() {
 	}
 }
 
-async function buildComposedStream(videoDeviceId, targetWidth, targetHeight) {
+function getVideoProfile() {
+	return VIDEO_PROFILES[videoProfileEl.value] || VIDEO_PROFILES.quality;
+}
+
+function isVideoProfileSupported(profileName) {
+	const profile = VIDEO_PROFILES[profileName];
+	return Boolean(profile) && MediaRecorder.isTypeSupported(profile.mimeType);
+}
+
+function loadVideoProfile() {
+	try {
+		const savedProfile = localStorage.getItem(VIDEO_PROFILE_STORAGE_KEY);
+		if (savedProfile && isVideoProfileSupported(savedProfile)) {
+			videoProfileEl.value = savedProfile;
+		}
+	} catch (error) {
+		console.warn("Could not read saved video profile: ", error);
+	}
+}
+
+function saveVideoProfile() {
+	try {
+		localStorage.setItem(VIDEO_PROFILE_STORAGE_KEY, videoProfileEl.value);
+	} catch (error) {
+		console.warn("Could not save video profile: ", error);
+	}
+}
+
+async function buildComposedStream(videoDeviceId, sizeConstraints) {
 
 	const supportedConstraints = navigator.mediaDevices.getSupportedConstraints();
+	const videoProfile = getVideoProfile();
 
-	if (!supportedConstraints.frameRate) {
+	if (videoProfile.exactFrameRate && !supportedConstraints.frameRate) {
 		throw new Error("Browser does not support frameRate constraint.");
 	}
 
 	const videoStream = await navigator.mediaDevices.getUserMedia({
 		video: {
 			deviceId: videoDeviceId ? { exact: videoDeviceId } : undefined,
-			width: { exact: targetWidth },
-			height: { exact: targetHeight },
-			frameRate: { exact: TARGET_CAMERA_FPS }
+			width: sizeConstraints.width,
+			height: sizeConstraints.height,
+			frameRate: videoProfile.exactFrameRate
+				? { exact: videoProfile.frameRate }
+				: videoProfile.frameRate
 		},
 		audio: false
 	});
@@ -411,11 +488,13 @@ async function buildComposedStream(videoDeviceId, targetWidth, targetHeight) {
 	const actualFPS = settings.frameRate;
 
 	if (
-		!Number.isFinite(actualFPS) ||
-		Math.abs(actualFPS - TARGET_CAMERA_FPS) > FPS_TOLERANCE
+		videoProfile.exactFrameRate && (
+			!Number.isFinite(actualFPS) ||
+			Math.abs(actualFPS - videoProfile.frameRate) > FPS_TOLERANCE
+		)
 	) {
 		videoStream.getTracks().forEach(t => t.stop());
-		throw new Error(`Camera does not support the target FPS of ${TARGET_CAMERA_FPS}. Actual FPS: ${actualFPS}`);
+		throw new Error(`Camera does not support the target FPS of ${videoProfile.frameRate}. Actual FPS: ${actualFPS}`);
 	}
 
 	// Add audio track if available
@@ -456,7 +535,7 @@ async function startFirstCamera() {
 			localStream = null;
 			liveVideoElement.srcObject = null;
 		}
-		const { composed, videoTrack } = await buildComposedStream(videoSource, 640, 360);
+		const { composed, videoTrack } = await buildComposedStream(videoSource, getVideoProfile().cam1);
 		localStream = composed;
 		liveVideoElement.srcObject = localStream;
 		await waitTrackLive(localStream.getAudioTracks()[0]);
@@ -507,7 +586,7 @@ async function startSecondCamera() {
 
 			return;
 		}
-		const { composed, videoTrack } = await buildComposedStream(videoSource2, 1920, 1080);
+		const { composed, videoTrack } = await buildComposedStream(videoSource2, getVideoProfile().cam2);
 		localStream2 = composed;
 		liveVideoElement2.srcObject = localStream2;
 		await waitTrackLive(localStream2.getAudioTracks()[0]);
@@ -539,7 +618,18 @@ async function restartCamerasForAudioChange() {
 	await startSecondCamera();
 }
 
+async function changeVideoProfile() {
+	if (!isVideoProfileSupported(videoProfileEl.value)) {
+		alert("This browser cannot record the selected video profile. Better quality profile will be used.");
+		videoProfileEl.value = "quality";
+	}
+	saveVideoProfile();
+	await startFirstCamera();
+	await startSecondCamera();
+}
+
 audioInputSelect.onchange = restartCamerasForAudioChange;
+videoProfileEl.onchange = changeVideoProfile;
 videoSelect.onchange = startFirstCamera;
 videoSelect2.onchange = startSecondCamera;
 
@@ -560,6 +650,28 @@ function toggleButtons(automation_running) {
 	toggleUsgBtn.disabled = automation_running;
 	deviceMEMS.disabled = automation_running;
 	audioInputSelect.disabled = automation_running;
+	videoProfileEl.disabled = automation_running;
+}
+
+function readFilenameOptions() {
+	return {
+		material: materialEl.value,
+		needleType: needleTypeEl.value,
+		microphoneType: sensorVersionEl.value
+	};
+}
+
+async function loadFilenameOptions() {
+	try {
+		const response = await fetch("/config");
+		if (!response.ok) throw new Error(`Server error ${response.status}`);
+		const options = await response.json();
+		renderSelectOptions(materialEl, options.materials || []);
+		renderSelectOptions(needleTypeEl, options.needleTypes || []);
+		renderSelectOptions(sensorVersionEl, options.sensorVersions || []);
+	} catch (error) {
+		console.error("Error loading filename options from setup: ", error);
+	}
 }
 
 function readCommonAutomationParams() {
@@ -582,6 +694,7 @@ function readCommonAutomationParams() {
 	return {
 		speed,
 		description,
+		...readFilenameOptions(),
 		iterations,
 		repetitions,
 		initialSleepTime,
@@ -597,9 +710,9 @@ function startSelectedAutomation() {
 		return alert(error.message);
 	}
 
-	const startForMode = automationModeStarters[pathModeEl.value];
+	const startForMode = automationModeStarters[automationModeEl.value];
 	if (!startForMode) {
-		return alert("Unsupported Dobot movement type.");
+		return alert("Unsupported automation mode.");
 	}
 	return startForMode(commonParams);
 }
@@ -624,7 +737,7 @@ function startPointAutomation(commonParams) {
 	};
 
 
-	fetch("/run", {
+	fetch("/run-points", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload)
@@ -700,7 +813,69 @@ function startArcAutomation(commonParams) {
 		radius
 	};
 
-	fetch("/run-arc", {
+	sendAutomationRequest("/run-arc", payload, "arc");
+}
+
+function startUpDownAutomation(commonParams) {
+	let initX;
+	let finishX;
+	let y;
+	let r;
+	let upZ;
+	let downZ;
+	try {
+		initX = readFiniteNumber(upDownInitXEl, "Initial X");
+		finishX = readFiniteNumber(upDownFinishXEl, "Finish X");
+		y = readFiniteNumber(upDownYEl, "Y");
+		r = readFiniteNumber(upDownREl, "R");
+		upZ = readFiniteNumber(upDownUpZEl, "Up Z");
+		downZ = readFiniteNumber(upDownDownZEl, "Down Z");
+	} catch (error) {
+		return alert(error.message);
+	}
+
+	const motionType = document.querySelector('input[name="upDownMotionType"]:checked').value;
+
+	let interval = upZ - downZ;
+	if (upDownIntervalToggleEl.checked) {
+		try {
+			interval = readFiniteNumber(upDownIntervalEl, "Interval");
+		} catch (error) {
+			return alert(error.message);
+		}
+	}
+
+	if (interval <= 0) {
+		return alert("Interval must be greater than 0. Check Up Z, Down Z and Interval values.");
+	}
+	if (motionType === "up_down_forward" && finishX <= initX) {
+		return alert("Finish X must be greater than Initial X in 'Up, down, forward' motion style.");
+	}
+	if (motionType === "up_down_forward" && (finishX - initX) / commonParams.iterations < 2) {
+		alert("Your gap between punctures is very small: " + (finishX - initX) / commonParams.iterations + " mm. But experiment is performing.");
+	}
+
+	const payload = {
+		...commonParams,
+		initX,
+		finishX,
+		y,
+		r,
+		upZ,
+		downZ,
+		motionType,
+		interval
+	};
+
+	sendAutomationRequest("/run-updown", payload, "up/down");
+}
+
+function startGridAutomation(commonParams) {
+	sendAutomationRequest("/run-grid", commonParams, "grid");
+}
+
+function sendAutomationRequest(endpoint, payload, modeName) {
+	fetch(endpoint, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(payload)
@@ -712,25 +887,48 @@ function startArcAutomation(commonParams) {
 		})
 		.then(data => {
 			startAutomationBt.disabled = true;
-			console.log("Arc automation started: ", data);
+			console.log(`${modeName} automation started: `, data);
 		})
 		.catch(error => {
 			toggleButtons(false);
 			console.error(error);
-			alert("Failed to start arc automation: " + error.message);
+			alert(`Failed to start ${modeName} automation: ` + error.message);
 		});
 }
 
 const automationModeStarters = {
 	points: startPointAutomation,
-	arc180: startArcAutomation
+	arc180: startArcAutomation,
+	updown: startUpDownAutomation,
+	grid: startGridAutomation
 };
 
-function updatePathMode() {
-	const isArc = pathModeEl.value === "arc180";
-	pointsPathForm.style.display = isArc ? "none" : "flex";
-	arcPathForm.style.display = isArc ? "flex" : "none";
-	if (isArc) updateArcPreview();
+const automationModeForms = {
+	points: pointsPathForm,
+	arc180: arcPathForm,
+	updown: upDownForm,
+	grid: gridForm
+};
+
+// Common automation fields that are not used by the given automation mode
+const automationModeHiddenFields = {
+	updown: [repetitionsGroup],
+	grid: [iterationsGroup, repetitionsGroup, initialSleepTimeGroup]
+};
+
+function updateAutomationMode() {
+	const automationMode = automationModeEl.value;
+
+	Object.entries(automationModeForms).forEach(([mode, form]) => {
+		form.style.display = mode === automationMode ? "flex" : "none";
+	});
+
+	const hiddenFields = automationModeHiddenFields[automationMode] || [];
+	[iterationsGroup, repetitionsGroup, initialSleepTimeGroup].forEach(field => {
+		field.style.display = hiddenFields.includes(field) ? "none" : "flex";
+	});
+
+	if (automationMode === "arc180") updateArcPreview();
 }
 
 function stopAutomation() {
@@ -775,7 +973,7 @@ function startManualRecording() {
 	fetch("/start-manual", {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ description: description, username: username })
+		body: JSON.stringify({ description: description, username: username, ...readFilenameOptions() })
 	})
 		.then(async res => {
 			const data = await res.json();
@@ -940,11 +1138,14 @@ function handleMemsToggle() {
 
 (async function init() {
 
+	await loadFilenameOptions();
+
 	// for getting devices and permissions
 	const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
 	stream.getTracks().forEach((t) => t.stop())
 	const devices = await navigator.mediaDevices.enumerateDevices();
 	getDevices(devices);
+	loadVideoProfile();
 
 	await startFirstCamera();
 	await startSecondCamera();
@@ -994,9 +1195,12 @@ speedSlider.addEventListener("input", (e) => {
 	speedValueEl.textContent = e.target.value;
 })
 addPointBtn.addEventListener("click", addPointRow);
-pathModeEl.addEventListener("change", updatePathMode);
+automationModeEl.addEventListener("change", updateAutomationMode);
 [arcCenterXEl, arcCenterYEl, arcZEl, arcRadiusEl].forEach(element => {
 	element.addEventListener("input", updateArcPreview);
+});
+upDownIntervalToggleEl.addEventListener("change", (e) => {
+	upDownIntervalEl.style.display = e.target.checked ? "block" : "none";
 });
 deviceUSG.addEventListener("change", () => handleUsgToggle(deviceUSG, deviceUSGStatus));
 trackerIMU.addEventListener("change", () => handleTrackerToggle("imu", trackerIMU, trackerIMUStatus));

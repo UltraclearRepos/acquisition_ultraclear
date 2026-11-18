@@ -56,12 +56,34 @@
                             <select id="audioSource"></select>
                         </div>
                         <div class="form-group">
+                            <label for="videoProfile">Video recording profile</label>
+                            <select id="videoProfile">
+                                <option value="quality">Better quality</option>
+                                <option value="performance">Better performance</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label for="videoSource">Video source</label>
                             <select id="videoSource"></select>
                         </div>
                         <div class="form-group">
                             <label for="videoSource2">Video source second</label>
                             <select id="videoSource2"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="material">Material</label>
+                            <select id="material"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="needleType">Needle type</label>
+                            <select id="needleType"></select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="sensorVersion">Sensor version</label>
+                            <select id="sensorVersion"></select>
                         </div>
 
                         <div class="form-group">
@@ -82,11 +104,11 @@
                         </div>
 
                         <div id="automationForm">
-                            <div class="form-group horizontal-group">
+                            <div id="iterationsGroup" class="form-group horizontal-group">
                                 <label for="iterations">Number of iterations</label>
                                 <input type="number" id="iterations" value="10" min="1" />
                             </div>
-                            <div class="form-group horizontal-group">
+                            <div id="repetitionsGroup" class="form-group horizontal-group">
                                 <label for="repetitions">Number of repetitions</label>
                                 <input type="number" id="repetitions" value="1" min="1" />
                             </div>
@@ -96,11 +118,13 @@
                                 </label>
                                 <input type="range" id="speed" name="speed" min="1" max="100" step="1" value="50" />
                             </div>
-                            <div class="form-group movement-type-selector">
-                                <label for="pathMode">Dobot movement type</label>
-                                <select id="pathMode">
+                            <div class="form-group automation-mode-selector">
+                                <label for="automationMode">Automation mode</label>
+                                <select id="automationMode">
                                     <option value="points">Coordinate path</option>
                                     <option value="arc180">Circular arc 180°</option>
+                                    <option value="updown">Up/Down</option>
+                                    <option value="grid">Grid (from file)</option>
                                 </select>
                             </div>
                             <div id="pointsPathForm" class="form-group points-section">
@@ -132,7 +156,54 @@
                                 </div>
                                 <div id="arcPointsPreview" class="arc-preview"></div>
                             </div>
-                            <div class="form-group horizontal-group">
+                            <div id="upDownForm" class="form-group" style="display: none;">
+                                <label>Up/Down parameters</label>
+                                <div class="arc-parameters">
+                                    <div class="param-group-wrapper">
+                                        <label for="upDownInitX">Initial X</label>
+                                        <input type="number" id="upDownInitX" value="300" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="upDownFinishX">Finish X</label>
+                                        <input type="number" id="upDownFinishX" value="400" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="upDownY">Y</label>
+                                        <input type="number" id="upDownY" value="0" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="upDownR">R</label>
+                                        <input type="number" id="upDownR" value="-50" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="upDownUpZ">Up Z</label>
+                                        <input type="number" id="upDownUpZ" value="80" step="any" />
+                                    </div>
+                                    <div class="param-group-wrapper">
+                                        <label for="upDownDownZ">Down Z</label>
+                                        <input type="number" id="upDownDownZ" value="0" step="any" />
+                                    </div>
+                                </div>
+                                <label>Motion style</label>
+                                <div class="radio-group">
+                                    <label><input type="radio" name="upDownMotionType" value="up_down" checked />Only up and down</label>
+                                    <label><input type="radio" name="upDownMotionType" value="up_down_forward" />Up, down, forward</label>
+                                </div>
+                                <div class="form-group horizontal-group">
+                                    <label for="upDownIntervalToggle">Interval</label>
+                                    <label class="simple-toggle">
+                                        <input type="checkbox" id="upDownIntervalToggle" />
+                                        <span class="slider"></span>
+                                    </label>
+                                    <input type="number" id="upDownInterval" min="0.001" step="any" style="display: none;" />
+                                </div>
+                            </div>
+                            <div id="gridForm" class="form-group" style="display: none;">
+                                <label>Grid parameters</label>
+                                <div class="arc-preview">Grid points are read from the file set as "grid_config" in setup.json.
+Sleep time is the recording duration at every point.</div>
+                            </div>
+                            <div id="initialSleepTimeGroup" class="form-group horizontal-group">
                                 <label for="initialSleepTime">Initial sleep time</label>
                                 <input type="number" id="initialSleepTime" value="3" min="0" />
                             </div>

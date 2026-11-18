@@ -26,6 +26,11 @@ PSMOVE_CAMERA_DELAY_S = 0.0
 AUDIO_CHANNEL = 0
 VIDEO_AUDIO_CHANNEL = 0
 
+# Smaller audio/video offsets are ignored. They are below the chirp detection
+# resolution, and the Opus encoder delay (~6.5 ms) is reported as a negative
+# audio start time even when the decoded audio starts together with the video.
+AUDIO_OFFSET_TOLERANCE_S = 0.01
+
 
 def read_wave(path):
     sample_rate, x = wavfile.read(path)
@@ -108,6 +113,129 @@ def has_audio_stream(video_file):
         text=True,
     )
     return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def ffprobe_values(video_file, select_stream, entries):
+    command = [
+        "ffprobe",
+        "-v",
+        "error",
+        "-select_streams",
+        select_stream,
+        "-show_entries",
+        entries,
+        "-of",
+        "csv=p=0",
+        str(video_file),
+    ]
+    result = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()]
+
+
+def stream_start_time(video_file, select_stream):
+    values = ffprobe_values(video_file, select_stream, "stream=start_time")
+    try:
+        return float(values[-1])
+    except (IndexError, ValueError):
+        return 0.0
+
+
+def video_codec(video_file):
+    values = ffprobe_values(video_file, "v:0", "stream=codec_name")
+    return values[-1] if values else None
+
+
+def remove_audio_offset(video_path):
+    """Shift the camera audio stream to start together with the video stream."""
+    video_start = stream_start_time(video_path, "v:0")
+    audio_start = stream_start_time(video_path, "a:0")
+    audio_offset = audio_start - video_start
+
+    if abs(audio_offset) < AUDIO_OFFSET_TOLERANCE_S:
+        print(f"Video: {video_path.name}, no audio offset")
+        return
+
+    temporary_path = video_path.with_name(
+        video_path.stem + "_audio_shifted" + video_path.suffix
+    )
+    ffmpeg_command = [
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+        "-i",
+        str(video_path),
+        "-itsoffset",
+        f"{-audio_offset:.6f}",
+        "-i",
+        str(video_path),
+        "-map",
+        "0:v",
+        "-map",
+        "1:a:0",
+        "-map_metadata",
+        "0",
+        "-c",
+        "copy",
+        "-avoid_negative_ts",
+        "make_zero",
+    ]
+
+    # FFmpeg WebM muxer accepts only VP8/VP9/AV1 video, so H.264 recordings
+    # are written with the Matroska muxer while keeping the .webm extension.
+    if video_codec(video_path) == "h264":
+        ffmpeg_command += ["-f", "matroska"]
+
+    ffmpeg_command.append(str(temporary_path))
+
+    result = subprocess.run(
+        ffmpeg_command,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        temporary_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Could not remove audio offset from {video_path}: "
+            f"{result.stderr.strip()}"
+        )
+
+    temporary_path.replace(video_path)
+    print(
+        f"Video: {video_path.name}, audio shifted by "
+        f"{-audio_offset * 1000:.2f} ms"
+    )
+
+
+def video_duration(video_file):
+    """Return the time from the first video frame to the end of the last frame."""
+    pts_times = []
+    last_frame_duration = None
+
+    for line in ffprobe_values(video_file, "v:0", "packet=pts_time,duration_time"):
+        parts = line.split(",")
+        try:
+            pts_times.append(float(parts[0]))
+        except ValueError:
+            continue
+        try:
+            last_frame_duration = float(parts[1])
+        except (IndexError, ValueError):
+            last_frame_duration = None
+
+    if len(pts_times) < 2:
+        return None
+
+    pts_times.sort()
+    if last_frame_duration is None:
+        last_frame_duration = float(np.median(np.diff(pts_times)))
+
+    return pts_times[-1] + last_frame_duration - pts_times[0]
 
 
 def calculate_energy_with_stft(signal, fs, n_fft=2048):
@@ -253,7 +381,8 @@ def correct_csv(path, delay):
     print(f"CSV: {path}, delay={delay * 1000:.2f} ms")
 
 
-def trim_audio_start(audio_path, video_path):
+def trim_audio_to_video(audio_path, video_path):
+    """Cut the WAV so it starts and ends together with the video."""
     delay = find_delay_by_sync(
         str(video_path),
         str(audio_path),
@@ -265,17 +394,38 @@ def trim_audio_start(audio_path, video_path):
         print(f"Audio unchanged: could not find chirp in {audio_path.name}")
         return
 
-    if delay <= 0:
-        print(f"Audio unchanged: {audio_path.name}, delay={delay:.6f} s")
+    duration = video_duration(video_path)
+    if duration is None:
+        print(f"Audio unchanged: could not read duration of {video_path.name}")
         return
 
     sample_rate, samples = wavfile.read(audio_path)
-    samples_to_remove = int(round(delay * sample_rate))
 
-    if samples_to_remove >= len(samples):
+    # WAV time = video time + delay
+    start_sample = max(0, int(round(delay * sample_rate)))
+    end_sample = min(
+        len(samples),
+        int(round((duration + delay) * sample_rate)),
+    )
+
+    if start_sample >= end_sample:
         raise RuntimeError(
-            f"Audio delay is longer than the recording: {audio_path}"
+            f"Audio does not overlap the video: {audio_path}"
         )
+
+    if delay < 0:
+        print(
+            f"Audio: {audio_path.name} starts {-delay:.6f} s after the "
+            "video, start unchanged"
+        )
+    if end_sample == len(samples) and (duration + delay) * sample_rate > len(samples):
+        print(
+            f"Audio: {audio_path.name} ends before the video, end unchanged"
+        )
+
+    if start_sample == 0 and end_sample == len(samples):
+        print(f"Audio unchanged: {audio_path.name}, delay={delay:.6f} s")
+        return
 
     temporary_path = audio_path.with_name(
         audio_path.stem + "_sync_tmp" + audio_path.suffix
@@ -283,12 +433,15 @@ def trim_audio_start(audio_path, video_path):
     wavfile.write(
         temporary_path,
         sample_rate,
-        samples[samples_to_remove:],
+        samples[start_sample:end_sample],
     )
     temporary_path.replace(audio_path)
 
     print(
-        f"Audio: {audio_path.name}, removed {delay:.6f} s from start"
+        f"Audio: {audio_path.name}, removed "
+        f"{start_sample / sample_rate:.6f} s from start and "
+        f"{(len(samples) - end_sample) / sample_rate:.6f} s from end, "
+        f"duration {(end_sample - start_sample) / sample_rate:.6f} s"
     )
 
 
@@ -301,10 +454,13 @@ def process_recording(name, videos, delays):
         for source in find_matching_files(source_dir, name):
             correct_csv(source, delay)
 
-    video_with_audio = next(
-        (video for video in sorted(videos) if has_audio_stream(video)),
-        None,
-    )
+    videos_with_audio = [
+        video for video in sorted(videos) if has_audio_stream(video)
+    ]
+    for video in videos_with_audio:
+        remove_audio_offset(video)
+
+    video_with_audio = videos_with_audio[0] if videos_with_audio else None
     for audio_path in find_matching_files(MICRO_DATA_DIR, name):
         if video_with_audio is None:
             print(
@@ -312,7 +468,7 @@ def process_recording(name, videos, delays):
                 f"{audio_path.name}"
             )
             continue
-        trim_audio_start(audio_path, video_with_audio)
+        trim_audio_to_video(audio_path, video_with_audio)
 
 
 def main():
