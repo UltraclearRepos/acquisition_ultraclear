@@ -331,6 +331,7 @@ def find_matching_files(folder, name):
 
 
 def correct_csv(path, delay):
+    """Add sync_timestamp to the CSV. Returns a problem description or None."""
     with path.open(newline="") as input_file:
         reader = csv.DictReader(input_file)
         fieldnames = list(reader.fieldnames or [])
@@ -345,7 +346,7 @@ def correct_csv(path, delay):
 
         if timestamp_column is None:
             print(f"Skipping {path}: no timestamp column")
-            return
+            return f"{path.parent.name}/{path.name}: no timestamp column, CSV unchanged"
 
         timestamp_index = fieldnames.index(timestamp_column) + 1
         if "sync_timestamp" not in fieldnames:
@@ -355,22 +356,32 @@ def correct_csv(path, delay):
 
     temporary_path = path.with_suffix(path.suffix + ".tmp")
 
-    with temporary_path.open("w", newline="") as output_file:
-        writer = csv.DictWriter(output_file, fieldnames=fieldnames)
-        writer.writeheader()
+    try:
+        with temporary_path.open("w", newline="") as output_file:
+            writer = csv.DictWriter(output_file, fieldnames=fieldnames)
+            writer.writeheader()
 
-        for row in rows:
-            raw_timestamp = float(row[timestamp_column])
-            row["sync_timestamp"] = f"{raw_timestamp - delay:.6f}"
-            writer.writerow(row)
+            for row in rows:
+                raw_timestamp = float(row[timestamp_column])
+                row["sync_timestamp"] = f"{raw_timestamp - delay:.6f}"
+                writer.writerow(row)
 
-    temporary_path.replace(path)
+        temporary_path.replace(path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
     print(f"CSV: {path}, delay={delay * 1000:.2f} ms")
+    return None
+
+
+def report(problems, message):
+    print(message)
+    problems.append(message)
 
 
 def trim_audio_to_video(audio_path, video_path, audio_channel):
-    """Cut the WAV so it starts and ends together with the video."""
+    """Cut the WAV so it starts and ends together with the video. Returns problems."""
+    problems = []
     delay = find_delay_by_sync(
         str(video_path),
         str(audio_path),
@@ -379,13 +390,13 @@ def trim_audio_to_video(audio_path, video_path, audio_channel):
     )
 
     if delay is None:
-        print(f"Audio unchanged: could not find chirp in {audio_path.name}")
-        return
+        report(problems, f"Audio unchanged: could not find chirp in {audio_path.name}")
+        return problems
 
     duration = video_duration(video_path)
     if duration is None:
-        print(f"Audio unchanged: could not read duration of {video_path.name}")
-        return
+        report(problems, f"Audio unchanged: could not read duration of {video_path.name}")
+        return problems
 
     sample_rate, samples = wavfile.read(audio_path)
 
@@ -397,33 +408,41 @@ def trim_audio_to_video(audio_path, video_path, audio_channel):
     )
 
     if start_sample >= end_sample:
-        raise RuntimeError(
-            f"Audio does not overlap the video: {audio_path}"
+        report(
+            problems,
+            f"Audio unchanged: {audio_path.name} does not overlap the video, "
+            f"delay={delay:.6f} s"
         )
+        return problems
 
     if delay < 0:
-        print(
+        report(
+            problems,
             f"Audio: {audio_path.name} starts {-delay:.6f} s after the "
             "video, start unchanged"
         )
     if end_sample == len(samples) and (duration + delay) * sample_rate > len(samples):
-        print(
+        report(
+            problems,
             f"Audio: {audio_path.name} ends before the video, end unchanged"
         )
 
     if start_sample == 0 and end_sample == len(samples):
         print(f"Audio unchanged: {audio_path.name}, delay={delay:.6f} s")
-        return
+        return problems
 
     temporary_path = audio_path.with_name(
         audio_path.stem + "_sync_tmp" + audio_path.suffix
     )
-    wavfile.write(
-        temporary_path,
-        sample_rate,
-        samples[start_sample:end_sample],
-    )
-    temporary_path.replace(audio_path)
+    try:
+        wavfile.write(
+            temporary_path,
+            sample_rate,
+            samples[start_sample:end_sample],
+        )
+        temporary_path.replace(audio_path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
 
     print(
         f"Audio: {audio_path.name}, removed "
@@ -431,16 +450,21 @@ def trim_audio_to_video(audio_path, video_path, audio_channel):
         f"{(len(samples) - end_sample) / sample_rate:.6f} s from end, "
         f"duration {(end_sample - start_sample) / sample_rate:.6f} s"
     )
+    return problems
 
 
 def process_recording(name, videos, root_dir, audio_dir, delays, audio_channel):
+    """Synchronize one recording. Returns descriptions of unchanged or partly changed files."""
     print(f"\nRecording: {name}")
+    problems = []
 
     for folder_name, delay in delays.items():
         source_dir = root_dir / folder_name
 
         for source in find_matching_files(source_dir, name):
-            correct_csv(source, delay)
+            problem = correct_csv(source, delay)
+            if problem:
+                problems.append(problem)
 
     # videos are ordered cam1, cam2, so cam1 is the reference when it has audio
     videos_with_audio = [
@@ -453,17 +477,19 @@ def process_recording(name, videos, root_dir, audio_dir, delays, audio_channel):
 
     audio_path = audio_dir / f"{name}.wav"
     if not audio_path.is_file():
-        print(f"Audio unchanged: no raw audio for {name}")
-        return
+        report(problems, f"Audio unchanged: no raw audio for {name}")
+        return problems
 
     if video_with_audio is None:
-        print(
+        report(
+            problems,
             f"Audio unchanged: no embedded camera audio for "
             f"{audio_path.name}"
         )
-        return
+        return problems
 
-    trim_audio_to_video(audio_path, video_with_audio, audio_channel)
+    problems.extend(trim_audio_to_video(audio_path, video_with_audio, audio_channel))
+    return problems
 
 
 def parse_args():
@@ -518,10 +544,24 @@ def main():
 
             recordings.setdefault(video_path.stem, []).append(video_path)
 
+    failed_recordings = []
     for name in sorted(recordings):
-        process_recording(name, recordings[name], root_dir, audio_dir, delays, args.audio_channel)
+        try:
+            problems = process_recording(name, recordings[name], root_dir, audio_dir, delays, args.audio_channel)
+        except Exception as e:
+            error = f"{type(e).__name__}: {e}"
+            print(f"Error processing {name}, skipping: {error}")
+            problems = [f"Error, recording skipped: {error}"]
+        if problems:
+            failed_recordings.append((name, problems))
 
     print("\nFinished.")
+    if failed_recordings:
+        print(f"\nRecordings with problems: {len(failed_recordings)}/{len(recordings)}")
+        for name, problems in failed_recordings:
+            print(f"  {name}")
+            for problem in problems:
+                print(f"    - {problem}")
 
 
 if __name__ == "__main__":
