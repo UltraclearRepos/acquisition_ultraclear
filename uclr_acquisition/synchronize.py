@@ -319,17 +319,6 @@ def timestamp_delays():
     }
 
 
-def find_matching_files(folder, name):
-    if not folder.exists():
-        return []
-
-    return sorted(
-        path
-        for path in folder.iterdir()
-        if path.is_file() and path.stem == name
-    )
-
-
 def correct_csv(path, delay):
     """Add sync_timestamp to the CSV. Returns a problem description or None."""
     with path.open(newline="") as input_file:
@@ -459,12 +448,13 @@ def process_recording(name, videos, root_dir, audio_dir, delays, audio_channel):
     problems = []
 
     for folder_name, delay in delays.items():
-        source_dir = root_dir / folder_name
+        source = root_dir / folder_name / f"{name}.csv"
+        if not source.is_file():
+            continue
 
-        for source in find_matching_files(source_dir, name):
-            problem = correct_csv(source, delay)
-            if problem:
-                problems.append(problem)
+        problem = correct_csv(source, delay)
+        if problem:
+            problems.append(problem)
 
     # videos are ordered cam1, cam2, so cam1 is the reference when it has audio
     videos_with_audio = [
