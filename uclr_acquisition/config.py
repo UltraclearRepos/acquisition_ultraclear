@@ -1,5 +1,14 @@
 import json
 
+# Folder for Raspberry Pi MEMS WAV recordings, relative to the working directory
+AUDIO_RAW_DIR = "audio_raw"
+
+# Folder for each camera's recordings, relative to the working directory
+CAMERA_VIDEO_DIRS = {
+    "cam1": "video_cam1",
+    "cam2": "video_cam2",
+}
+
 
 class Configurator:
 

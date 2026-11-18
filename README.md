@@ -117,7 +117,6 @@ All configuration is stored in one `setup.json` file:
     "username": "pi",
     "password": ""
   },
-  "local_dir": "micro_data",
   "remote_dir": "uclr_acquisition",
   "grid_config": "C:\\path\\to\\grid_config.json",
   "materials": ["Slime", "Silicone", "PU"],
@@ -135,11 +134,11 @@ of unused devices can be omitted:
 | `psmove_dll_path` | `PSMove Tracker` checkbox |
 | `imu_port` | `IMU Tracker` checkbox |
 | `raspberry_pi`, `remote_dir` | `Raspberry Pi MEMS microphone` checkbox |
-| `local_dir` | MEMS WAV download folder, `Delete Last Recording`, and `uclr_annotate` |
 | `grid_config` | `Grid (from file)` automation mode |
 | `materials`, `needleTypes`, `sensorVersions` | options of the `Material`, `Needle type`, and `Sensor version` selects |
 
 An empty Raspberry Pi password allows key-based or SSH-agent authentication.
+MEMS WAV files are always downloaded to `audio_raw/` in the working directory.
 The selected material, needle type, and sensor version are added to recording
 file names. A missing list leaves its select empty.
 
@@ -172,28 +171,47 @@ Run the command in the folder where recordings should be saved. Without
 `--setup`, the features listed in [Configuration](#configuration) cannot read
 their settings.
 
+Camera recordings are saved as `video_cam1/<recording>.webm` and
+`video_cam2/<recording>.webm`. Both cameras use the same file name, without a
+camera suffix. MEMS WAV files are saved as `audio_raw/<recording>.wav`.
+
 ## uclr_sync
 
-Synchronizes sensor data and Raspberry Pi MEMS audio with camera recordings.
-The command has no options and no help message: running `uclr_sync --help`
-also starts the synchronization.
+```commandline
+usage: uclr_sync [-h] [--root-dir ROOT_DIR] --audio-channel AUDIO_CHANNEL
+
+Synchronize sensor data timestamps and Raspberry Pi MEMS audio with camera recordings.
+
+options:
+  -h, --help            show this help message and exit
+  --root-dir ROOT_DIR   Directory containing video_cam1/, video_cam2/, audio_raw/ and sensor data
+                        folders (default: current directory).
+  --audio-channel AUDIO_CHANNEL
+                        Audio channel to use for synchronization
+```
 
 Run in commandline from the folder where `uclr_acquisition` saved the
 recordings:
 
 ```commandline
-uclr_sync
+uclr_sync --audio-channel 0
 ```
 
-For every recording in `videos/`, the command:
+or pass that folder explicitly:
+
+```commandline
+uclr_sync --root-dir D:\path\to\recordings --audio-channel 0
+```
+
+For every recording in `video_cam1/` and `video_cam2/`, the command:
 
 1. adds or updates the `sync_timestamp` column in the matching CSV files in
    `dobot/`, `usg_timestamps/`, `imu/`, and `psmove/`,
 2. shifts the audio stream of every camera WebM file so it starts together
    with the video stream, without re-encoding. Offsets below 10 ms are ignored,
 3. finds the synchronization chirp in the `cam1` audio and in the matching WAV
-   file in `micro_data/`, and cuts the WAV so it starts and ends together with
-   the `cam1` video.
+   file in `audio_raw/`, and cuts the WAV so it starts and ends together with
+   the `cam1` video. When the `cam1` recording has no audio, `cam2` is used.
 
 When the WAV starts after the video or ends before it, that part of the WAV is
 left unchanged. The WAV samples are only cut, without re-encoding or
@@ -201,8 +219,7 @@ resampling.
 
 The device delays are defined at the top of `uclr_acquisition/synchronize.py`
 as `delay = device_time - camera_time`, and
-`sync_timestamp = timestamp - delay`. WAV files are read from `micro_data/`
-regardless of `local_dir`. USG MP4 files are not modified.
+`sync_timestamp = timestamp - delay`. USG MP4 files are not modified.
 
 The command modifies CSV, WebM, and WAV files in place, so keep a copy of the
 original recordings when they are needed. FFmpeg and `ffprobe` must be
@@ -211,16 +228,16 @@ available on `PATH`.
 ## uclr_annotate
 
 ```commandline
-usage: uclr_annotate [-h] [--camera {cam1,cam2}] [--audio-channel {0,1}]
+usage: uclr_annotate [-h] [--camera {cam1,cam2}] --audio-channel {0,1}
 
-Annotate acquisition videos from the videos/ directory and use matching audio from local_dir
-configured in setup.json.
+Annotate acquisition videos from the video_cam1/ or video_cam2/ directory and use matching audio
+from the audio_raw/ directory.
 
 options:
   -h, --help            show this help message and exit
   --camera {cam1,cam2}  Camera recordings to annotate (default: cam1).
   --audio-channel {0,1}
-                        Audio channel used for playback and visualization (default: 0).
+                        Audio channel used for playback and visualization.
 ```
 
 Run in commandline from the folder where `uclr_acquisition` saved the
@@ -230,9 +247,9 @@ recordings:
 uclr_annotate --camera cam2 --audio-channel 1
 ```
 
-Videos are read from `videos/`. The matching WAV file is read from `local_dir`
-in `setup.json` in the same folder, or from `micro_data/` when the setting is
-missing. Annotations are saved in `annotations/<recording name>.json`.
+Videos are read from `video_cam1/`, or `video_cam2/` with `--camera cam2`, and
+the matching WAV files from `audio_raw/`. Annotations are saved in
+`annotations/<recording>.json`, shared by both cameras.
 
 | Key | Action |
 |---|---|
@@ -246,4 +263,117 @@ missing. Annotations are saved in `annotations/<recording name>.json`.
 | Esc | Exit. |
 
 Waveform and spectrogram views can be selected from the control bar.
+
+## uclr_annotate_positions
+
+```commandline
+usage: uclr_annotate_positions [-h] [--root-dir ROOT_DIR] [--camera {cam1,cam2}] --marker-length
+                               MARKER_LENGTH --marker-margin MARKER_MARGIN [--fps FPS] [--display]
+                               [--cube] [--no-cube] [--dobot] [--no-dobot] --needle-offset
+                               NEEDLE_OFFSET [--z-offset Z_OFFSET]
+                               [--starting-position STARTING_POSITION]
+                               [--table-offset TABLE_OFFSET] [--distances-path DISTANCES_PATH]
+                               [--annotation-axis {X,Y,Z}]
+
+Tool for annotating position of needle in videos from the video_cam1/ or video_cam2/ folder.
+Matching audio files are read from the audio_raw/ folder. Positions are saved in the
+labelled_positions/ folder. When you provide distances.txt file, it will produce annotations in
+the annotations/ folder. distances.txt file should look like: 12,8.5,7,5.4
+
+options:
+  -h, --help            show this help message and exit
+  --root-dir ROOT_DIR   Directory containing video_cam1/, video_cam2/ and audio_raw/ folders
+                        (default: current directory).
+  --camera {cam1,cam2}  Camera recordings to track (default: cam1).
+  --marker-length MARKER_LENGTH
+                        Length of the Aruco marker in cm (From protocol)
+  --marker-margin MARKER_MARGIN
+                        Margin around the Aruco marker in cm (From protocol)
+  --fps FPS             Frames per second for video processing (default: 30)
+  --display             If true will display tracker on video
+  --cube                If provided will use cube to detect table grund
+  --no-cube             If provided will NOT use cube to detect table grund
+  --dobot               Argument need to be provided if dobot is used during recordings
+  --no-dobot            Argument need to be provided if dobot is NOT used during recordings
+  --needle-offset NEEDLE_OFFSET
+                        Needle offset in cm (From protocol)
+  --z-offset Z_OFFSET   Z-axis offset in cm, if not provided default offset will be used
+  --starting-position STARTING_POSITION
+                        Starting position of the needle in cm (default: 0.0 cm). Used only by mode
+                        without cube
+  --table-offset TABLE_OFFSET
+                        E.g. when provided 2cm, level 0 will be 2 cm above table (By default 0.0
+                        cm)
+  --distances-path DISTANCES_PATH
+                        Path to distances.txt file for annotations (if not provided, will not
+                        annotate, only track positions)
+  --annotation-axis {X,Y,Z}
+                        Coordinate used for annotations (default: Y).
+```
+
+Run in commandline from the folder where `uclr_acquisition` saved the
+recordings, or pass that folder with `--root-dir`:
+
+```commandline
+uclr_annotate_positions --marker-length 4 --marker-margin 0.5 --needle-offset 3 --no-cube --dobot --fps 15 --distances-path distances.txt
+```
+
+The command tracks ArUco marker 0 (`DICT_4X4_50`) in every recording in
+`video_cam1/`, or in `video_cam2/` with `--camera cam2`. The cube mode
+additionally requires the `DICT_5X5_100` cube markers 0-2 in the first frames.
+
+Outputs in the root directory:
+
+- `labelled_positions/<recording>.csv` - needle position and velocity in every
+  frame,
+- `annotations/<recording>.json` - frames where the needle crosses the
+  distances from `distances.txt`. Audio annotations are added when the
+  matching WAV in `audio_raw/` has the same duration as the video
+  (±0.1 s).
+
+Pass `--fps` equal to the recording frame rate: 15 for the `Better quality`
+video profile and 30 for `Better performance`. Frame times and audio samples
+are calculated from it.
+
+The output files are overwritten when the command runs again, also for the
+other camera. `annotations/<recording>.json` is the same file that
+`uclr_annotate` uses.
+
+## uclr_review_annotations
+
+```commandline
+usage: uclr_review_annotations [-h] [--root-dir ROOT_DIR] --audio-channel AUDIO_CHANNEL
+
+Browse annotated video frames and needle positions. Videos are read from video_cam1/, WAV files
+from audio_raw/, annotations from annotations/ and positions from labelled_positions/.
+
+options:
+  -h, --help            show this help message and exit
+  --root-dir ROOT_DIR   Directory containing video_cam1/, video_cam2/, audio_raw/, annotations/
+                        and labelled_positions/ folders (default: current directory).
+  --audio-channel AUDIO_CHANNEL
+                        WAV channel for the spectrogram
+```
+
+Run in commandline from the folder where `uclr_acquisition` saved the
+recordings, or pass that folder with `--root-dir`:
+
+```commandline
+uclr_review_annotations --audio-channel 0
+```
+
+The viewer shows every annotated frame of the `video_cam1/` recordings that
+have both `annotations/<recording>.json` and
+`labelled_positions/<recording>.csv`, together with the needle position and
+the spectrogram of `audio_raw/<recording>.wav`. Navigation spans all
+recordings and starts paused.
+
+| Key | Action |
+|---|---|
+| Space | Play or pause, one annotation per second. |
+| A / D | Previous or next annotation. |
+| Left / Right | Step one frame from the annotation (blue marker). |
+| Enter | Save the stepped frame as the annotation (green marker), also updating the audio annotation. |
+| F | Copy the `cam1` and `cam2` videos and the WAV of the current recording to `tofix_video_cam1/`, `tofix_video_cam2/`, and `tofix_audio_raw/`. Missing files are skipped. |
+| Esc | Exit. |
 

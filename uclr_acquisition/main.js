@@ -146,7 +146,8 @@ socket.on("record", (msg) => {
 
 		if (localStream) {
 			onRecordStart({
-				filename: addSuffix(filename, "_cam1"),
+				filename: filename,
+				camera: "cam1",
 				stream: localStream,
 				setRecorder: (recorder) => mediaRecorder = recorder,
 				setChunks: (chunks) => recordedChunks = chunks,
@@ -156,7 +157,8 @@ socket.on("record", (msg) => {
 
 		if (localStream2) {
 			onRecordStart({
-				filename: addSuffix(filename, "_cam2"),
+				filename: filename,
+				camera: "cam2",
 				stream: localStream2,
 				setRecorder: (recorder) => mediaRecorder2 = recorder,
 				setChunks: (chunks) => recordedChunks2 = chunks,
@@ -248,15 +250,7 @@ function cameraUploadFinished(error = null) {
 	}
 }
 
-function addSuffix(filename, suffix) {
-	const dotIndex = filename.lastIndexOf('.');
-	if (dotIndex === -1) {
-		return filename + suffix;
-	}
-	return filename.slice(0, dotIndex) + suffix + filename.slice(dotIndex);
-}
-
-function onRecordStart({ filename, stream, setRecorder, setChunks }) {
+function onRecordStart({ filename, camera, stream, setRecorder, setChunks }) {
 
 	const chunks = [];
 	const videoProfile = getVideoProfile();
@@ -285,6 +279,7 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 				const formData = new FormData();
 				formData.append("file", blob, filename);
 				formData.append("codec", videoProfile.codec);
+				formData.append("camera", camera);
 
 				if (camStartTimestamp !== null) {
 					formData.append("start_timestamp", camStartTimestamp);
@@ -296,14 +291,14 @@ function onRecordStart({ filename, stream, setRecorder, setChunks }) {
 				});
 
 				if (!response.ok) {
-					throw new Error(`Upload of ${filename} failed with status ${response.status}`);
+					throw new Error(`Upload of ${camera} ${filename} failed with status ${response.status}`);
 				}
 			} else {
 				console.warn("Backend forced not to upload video");
 			}
 		} catch (error) {
 			uploadError = error;
-			console.error(`Error uploading ${filename}:`, error);
+			console.error(`Error uploading ${camera} ${filename}:`, error);
 		} finally {
 			cameraUploadFinished(uploadError);
 		}

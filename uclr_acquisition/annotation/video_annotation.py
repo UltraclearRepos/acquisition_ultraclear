@@ -12,14 +12,11 @@ import numpy as np
 from scipy.io import wavfile
 
 from .audio_player import AudioPlayer
+from ..config import AUDIO_RAW_DIR, CAMERA_VIDEO_DIRS
 
 
 WINDOW_NAME = "Video Annotation"
-VIDEO_FOLDER_NAME = "videos"
-DEFAULT_AUDIO_FOLDER_NAME = "micro_data"
 ANNOTATIONS_FOLDER_NAME = "annotations"
-SETUP_FILENAME = "setup.json"
-DEFAULT_AUDIO_CHANNEL = 0
 
 MAX_WINDOW_WIDTH = 1600
 MAX_WINDOW_HEIGHT = 1200
@@ -375,16 +372,8 @@ def mouse_callback(event, x, y, flags, param):
             )
 
 
-def recording_name(video_path):
-    name = Path(video_path).stem
-    for suffix in ("_cam1", "_cam2"):
-        if name.lower().endswith(suffix):
-            return name[: -len(suffix)]
-    return name
-
-
 def annotation_path(video_path, root_dir):
-    return root_dir / ANNOTATIONS_FOLDER_NAME / f"{recording_name(video_path)}.json"
+    return root_dir / ANNOTATIONS_FOLDER_NAME / f"{Path(video_path).stem}.json"
 
 
 def durations_match(total_frames, fps, audio_sample_rate, audio_signal, eps=0.1):
@@ -736,35 +725,18 @@ def annotate_video(video_path, audio_path, root_dir, audio_channel):
     return "next"
 
 
-def configured_audio_dir(root_dir):
-    setup_path = root_dir / SETUP_FILENAME
-    if setup_path.exists():
-        try:
-            with setup_path.open(encoding="utf-8") as setup_file:
-                setup_data = json.load(setup_file)
-            configured_path = setup_data.get("local_dir")
-            if configured_path:
-                audio_dir = Path(configured_path)
-                return audio_dir if audio_dir.is_absolute() else root_dir / audio_dir
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"Could not read {setup_path}: {exc}")
-    return root_dir / DEFAULT_AUDIO_FOLDER_NAME
-
-
-def process_videos(camera, audio_channel=DEFAULT_AUDIO_CHANNEL):
+def process_videos(camera, audio_channel):
     root_dir = Path.cwd()
-    video_dir = root_dir / VIDEO_FOLDER_NAME
-    audio_dir = configured_audio_dir(root_dir)
+    video_dir = root_dir / CAMERA_VIDEO_DIRS[camera]
+    audio_dir = root_dir / AUDIO_RAW_DIR
     if not video_dir.is_dir():
         raise FileNotFoundError(f"Video directory does not exist: {video_dir}")
 
-    camera_suffix = f"_{camera}"
     videos = sorted(
         path
         for path in video_dir.iterdir()
         if path.is_file()
         and path.suffix.lower() in (".mp4", ".webm")
-        and path.stem.lower().endswith(camera_suffix)
     )
     if not videos:
         raise FileNotFoundError(
@@ -774,7 +746,7 @@ def process_videos(camera, audio_channel=DEFAULT_AUDIO_CHANNEL):
     index = 0
     while 0 <= index < len(videos):
         video_path = videos[index]
-        audio_path = audio_dir / f"{recording_name(video_path)}.wav"
+        audio_path = audio_dir / f"{video_path.stem}.wav"
         result = annotate_video(video_path, audio_path, root_dir, audio_channel)
         if result == "quit":
             break
@@ -787,8 +759,8 @@ def process_videos(camera, audio_channel=DEFAULT_AUDIO_CHANNEL):
 def parse_args():
     parser = argparse.ArgumentParser(
         description=(
-            "Annotate acquisition videos from the videos/ directory and use "
-            "matching audio from local_dir configured in setup.json."
+            "Annotate acquisition videos from the video_cam1/ or video_cam2/ "
+            "directory and use matching audio from the audio_raw/ directory."
         )
     )
     parser.add_argument(
@@ -801,8 +773,8 @@ def parse_args():
         "--audio-channel",
         type=int,
         choices=(0, 1),
-        default=DEFAULT_AUDIO_CHANNEL,
-        help="Audio channel used for playback and visualization (default: 0).",
+        required=True,
+        help="Audio channel used for playback and visualization.",
     )
     return parser.parse_args()
 

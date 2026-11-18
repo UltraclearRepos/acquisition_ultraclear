@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-18
+### Added
+- `uclr_annotate_positions` command for ArUco needle position tracking and distance annotations
+- `uclr_review_annotations` command for browsing and correcting annotations with needle positions
+
+### Changed
+- MEMS WAV files are always stored in `audio_raw/`, the `local_dir` setup field is removed
+- Camera recordings are stored in `video_cam1/` and `video_cam2/` instead of `videos/`, without the `_cam1`/`_cam2` file name suffix
+- `--audio-channel` is required in `uclr_annotate` instead of defaulting to channel 0
+
 ## [1.0.0] - 2026-11-18
 ### Added
 - Up/Down dobot mode

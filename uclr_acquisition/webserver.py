@@ -5,7 +5,7 @@ from eventlet import tpool
 from flask import Flask, request, jsonify, send_from_directory, Response
 import subprocess
 import cv2
-from uclr_acquisition.config import config
+from uclr_acquisition.config import config, AUDIO_RAW_DIR, CAMERA_VIDEO_DIRS
 from uclr_acquisition.experiment import (
     safe_run_points_automation,
     safe_run_arc_automation,
@@ -59,7 +59,11 @@ def upload_video():
     print(f'Received upload request')
     file = request.files['file']
     filename = file.filename
-    video_output_dir = os.path.join(os.getcwd(), "videos")
+    camera = request.form.get("camera")
+    if camera not in CAMERA_VIDEO_DIRS:
+        return jsonify({"status": "error", "message": f"Unknown camera: {camera}"}), 400
+
+    video_output_dir = os.path.join(os.getcwd(), CAMERA_VIDEO_DIRS[camera])
     os.makedirs(video_output_dir, exist_ok=True)
 
     file_path = os.path.join(video_output_dir, filename)
@@ -71,10 +75,6 @@ def upload_video():
         video_ts_dir = os.path.join(os.getcwd(), "video_timestamps")
         os.makedirs(video_ts_dir, exist_ok=True)
         base = os.path.splitext(filename)[0]
-        for suffix in ("_cam1", "_cam2"):
-            if base.endswith(suffix):
-                base = base[:-len(suffix)]
-                break
         video_ts_path = os.path.join(video_ts_dir, f"{base}.csv")
         if not os.path.exists(video_ts_path):
             with open(video_ts_path, 'w') as f:
@@ -234,7 +234,7 @@ def device_mems_toggle():
                     username=rpi_config["username"],
                     password=rpi_config["password"],
                     remote_dir=config["remote_dir"],
-                    local_dir=config["local_dir"],
+                    local_dir=AUDIO_RAW_DIR,
                 )
                 sensors.mems_microphone.connect()
             except Exception as exc:
