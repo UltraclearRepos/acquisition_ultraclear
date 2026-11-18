@@ -3,14 +3,22 @@
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-18
+### Added
+- `uclr_annotate_positions` command for ArUco needle position tracking and distance annotations
+- `uclr_review_annotations` command for browsing and correcting annotations with needle positions
+
+### Changed
+- MEMS WAV files are always stored in `audio_raw/`, the `local_dir` setup field is removed
+- Camera recordings are stored in `video_cam1/` and `video_cam2/` instead of `videos/`, without the `_cam1`/`_cam2` file name suffix
+- `--audio-channel` is required in `uclr_annotate` instead of defaulting to channel 0
+
 ## [1.0.0] - 2026-11-18
 ### Added
 - Up/Down dobot mode
 - Grid (from file) dobot mode
 - Video recording profile selection: better quality (VP9) or better performance (H.264)
 - Material, needle type and sensor version selects with options from setup.json, added to recording file names
-- `uclr_annotate_positions` command for ArUco needle position tracking and distance annotations
-- `uclr_review_annotations` command for browsing and correcting annotations with needle positions
 
 ### Changed
 - Remux H.264 camera recordings with the Matroska muxer
@@ -18,9 +26,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Rename coordinate path automation endpoint from `/run` to `/run-points`
 - Synchronization shifts the camera audio stream to start with the video stream
 - Synchronization cuts the end of the MEMS WAV to the camera video duration
-- MEMS WAV files are always stored in `audio_raw/`, the `local_dir` setup field is removed
-- Camera recordings are stored in `video_cam1/` and `video_cam2/` instead of `videos/`, without the `_cam1`/`_cam2` file name suffix
-- `--audio-channel` is required in `uclr_annotate` instead of defaulting to channel 0
 
 ## [0.8.0] - 2026-09-30
 ### Added
