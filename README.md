@@ -12,8 +12,6 @@ Devices are connected only after enabling their checkbox in the application.
 
 ## Installation
 
-### Highly recommended installation
-
 Requires Python 3.10 and FFmpeg 4.3.1. To install the tool:
 
 1. Create a folder for the tool and enter it.
@@ -58,14 +56,51 @@ python -m pip install https://github.com/UltraclearRepos/acquisition_ultraclear/
 To run the application later, open a terminal in the tool folder and activate
 the environment as described above.
 
-### Basic installation (not recommended)
+## Device setup
 
-```commandline
-python -m pip install https://github.com/UltraclearRepos/acquisition_ultraclear/archive/main.zip
-```
+The ultrasound scanner and PSMove tracker need vendor software. Install it only
+for the devices you plan to use.
 
-The ultrasound scanner and PSMove require their vendor DLLs. Raspberry Pi
-recording requires SSH access and an ALSA-compatible MEMS microphone.
+### Ultrasound scanner (Telemed)
+
+1. **Telemed drivers and Echo Wave II.** Download and install both packages from
+   the [Telemed software page](https://www.pcultrasound.com/support/software/).
+2. **USGFW2 SDK.** Download the SDK from the
+   [Telemed SDK page](https://www.pcultrasound.com/support/sdk/), extract it
+   with the password `7e39k47g893dpk`, and complete the installation.
+3. **Research tools.** Download the *TELEMED Real-time Imaging for the Research*
+   ZIP package from the
+   [Telemed research tools page](https://www.pcultrasound.com/research/research_tools/)
+   and extract it.
+4. **Configuration.** Set `usg_dll_path` in `setup.json` to `usgfw2wrapper.dll`
+   from the research tools package, for example
+   `...\Real-time Imaging for the Research\usgfw2wrapper_C++_sources\x64\Release\usgfw2wrapper.dll`.
+
+> **Warning:** Extract the Telemed ZIP files with WinRAR or 7-Zip. The default
+> Windows unzip tool can corrupt the files.
+
+### PSMove tracker (PSMoveServiceEx)
+
+1. **Download.** Download the `.zip` file of the latest
+   [PSMoveServiceEx release](https://github.com/Timocop/PSMoveServiceEx/releases)
+   and extract it to a local folder.
+2. **PSEye cameras.** When setting up PlayStation Eye cameras for the first
+   time, install their drivers according to the
+   [PSEye setup instructions](https://github.com/psmoveservice/PSMoveService/wiki/PSEye-Software-Setup-(Windows)).
+3. **Controller pairing.** Pair the PS Move controllers via Bluetooth according
+   to the
+   [pairing instructions](https://github.com/psmoveservice/PSMoveService/wiki/PSMove-Bluetooth-Pairing).
+   The first pairing requires a USB connection.
+4. **Calibration.** Run `PSMoveService.exe` and then `PSMoveConfigTool.exe` from
+   the extracted folder, and complete the calibrations in this order:
+   1. [Magnetometer](https://github.com/psmoveservice/PSMoveService/wiki/PSMove-Magnetometer-Calibration),
+   2. [Color filter](https://github.com/psmoveservice/PSMoveService/wiki/Color-Filter-Calibration),
+   3. [Tracker pose](https://github.com/psmoveservice/PSMoveService/wiki/Tracker-Pose-Calibration).
+5. **Configuration.** Set `psmove_dll_path` in `setup.json` to
+   `PSMoveClient_CAPI.dll` from the extracted PSMoveServiceEx folder.
+
+`PSMoveService.exe` must be running before the `PSMove Tracker` checkbox is
+enabled in the application.
 
 ## Configuration
 
@@ -83,150 +118,132 @@ All configuration is stored in one `setup.json` file:
     "password": ""
   },
   "local_dir": "micro_data",
-  "remote_dir": "uclr_acquisition"
+  "remote_dir": "uclr_acquisition",
+  "grid_config": "C:\\path\\to\\grid_config.json",
+  "materials": ["Slime", "Silicone", "PU"],
+  "needleTypes": ["Type1", "Type2", "Type3"],
+  "sensorVersions": ["TypeA", "TypeB", "TypeC"]
 }
 ```
 
+Fields are read only when the feature that uses them is enabled, so the fields
+of unused devices can be omitted:
+
+| Field | Required for |
+|---|---|
+| `usg_dll_path` | `USG Scanner` checkbox |
+| `psmove_dll_path` | `PSMove Tracker` checkbox |
+| `imu_port` | `IMU Tracker` checkbox |
+| `raspberry_pi`, `remote_dir` | `Raspberry Pi MEMS microphone` checkbox |
+| `local_dir` | MEMS WAV download folder, `Delete Last Recording`, and `uclr_annotate` |
+| `grid_config` | `Grid (from file)` automation mode |
+| `materials`, `needleTypes`, `sensorVersions` | options of the `Material`, `Needle type`, and `Sensor version` selects |
+
 An empty Raspberry Pi password allows key-based or SSH-agent authentication.
+The selected material, needle type, and sensor version are added to recording
+file names. A missing list leaves its select empty.
 
-## Running
+## uclr_acquisition
 
-Start the application with:
+```commandline
+usage: uclr_acquisition [-h] [--setup SETUP] [--port PORT]
 
-```powershell
+Web browser interface for synchronous acquisition of audio (from rasberry_pi/banana_pi devboard)
+and video from webcam
+
+options:
+  -h, --help     show this help message and exit
+  --setup SETUP  Path to setup JSON file (if not provided or some fields are missing, default
+                 configuration is used.)
+  --port PORT    Port (default 5000)
+```
+
+Run in commandline:
+
+```commandline
 uclr_acquisition --setup setup.json
 ```
 
-To use a different HTTP port:
+This runs the application in Python and opens the web interface in the browser
+at `http://127.0.0.1:5000`, or at the port passed with `--port`. Stop the
+application with Ctrl+C in the commandline.
 
-```powershell
-uclr_acquisition --setup setup.json --port 5001
-```
+Run the command in the folder where recordings should be saved. Without
+`--setup`, the features listed in [Configuration](#configuration) cannot read
+their settings.
 
-The application opens the browser automatically. The default address is
-`http://127.0.0.1:5000`.
+## uclr_sync
 
-## Recording workflow
+Synchronizes sensor data and Raspberry Pi MEMS audio with camera recordings.
+The command has no options and no help message: running `uclr_sync --help`
+also starts the synchronization.
 
-1. Enable the required USG, tracker, or Raspberry Pi MEMS devices.
-2. Select one or two camera sources.
-3. Select `Camera audio input source` to embed audio in the camera recordings.
-   Selecting `None` records video without an audio track.
-4. Configure the Dobot path and start automation, or switch to manual mode.
+Run in commandline from the folder where `uclr_acquisition` saved the
+recordings:
 
-Both camera recordings use the same browser audio track. Audio is embedded
-directly in each WebM file and is not saved as a separate camera-audio file.
-
-When the Raspberry Pi MEMS microphone is enabled, it records a stereo,
-48 kHz, 32-bit WAV using `arecord`. The WAV is downloaded to `local_dir`
-after recording.
-
-After the MEMS recorder and camera start, the application plays the same
-0.2-second, 500-4000 Hz chirp used by VibroNav through the system default
-audio output. The chirp is a marker for aligning camera audio and the
-Raspberry Pi WAV during post-processing.
-
-## Output files
-
-Depending on the enabled devices, recordings are stored in:
-
-- `videos/` - camera WebM files,
-- `video_timestamps/` - camera start timestamps,
-- `micro_data/` or the configured `local_dir` - Raspberry Pi MEMS WAV files,
-- `usg/` and `usg_timestamps/` - ultrasound recordings,
-- `dobot/` - Dobot positions,
-- `imu/` and `psmove/` - tracker data.
-
-`Delete Last Recording` removes files belonging to the most recent recording
-from the local output directories.
-
-## Synchronization
-
-The package installs a separate synchronization command:
-
-```powershell
+```commandline
 uclr_sync
 ```
 
-Run it from the acquisition directory containing `videos/`, `micro_data/`,
-`dobot/`, `usg_timestamps/`, `imu/`, and `psmove/`. It can also be started
-without the console entry point:
+For every recording in `videos/`, the command:
 
-```powershell
-python -m uclr_acquisition.synchronize
+1. adds or updates the `sync_timestamp` column in the matching CSV files in
+   `dobot/`, `usg_timestamps/`, `imu/`, and `psmove/`,
+2. shifts the audio stream of every camera WebM file so it starts together
+   with the video stream, without re-encoding. Offsets below 10 ms are ignored,
+3. finds the synchronization chirp in the `cam1` audio and in the matching WAV
+   file in `micro_data/`, and cuts the WAV so it starts and ends together with
+   the `cam1` video.
+
+When the WAV starts after the video or ends before it, that part of the WAV is
+left unchanged. The WAV samples are only cut, without re-encoding or
+resampling.
+
+The device delays are defined at the top of `uclr_acquisition/synchronize.py`
+as `delay = device_time - camera_time`, and
+`sync_timestamp = timestamp - delay`. WAV files are read from `micro_data/`
+regardless of `local_dir`. USG MP4 files are not modified.
+
+The command modifies CSV, WebM, and WAV files in place, so keep a copy of the
+original recordings when they are needed. FFmpeg and `ffprobe` must be
+available on `PATH`.
+
+## uclr_annotate
+
+```commandline
+usage: uclr_annotate [-h] [--camera {cam1,cam2}] [--audio-channel {0,1}]
+
+Annotate acquisition videos from the videos/ directory and use matching audio from local_dir
+configured in setup.json.
+
+options:
+  -h, --help            show this help message and exit
+  --camera {cam1,cam2}  Camera recordings to annotate (default: cam1).
+  --audio-channel {0,1}
+                        Audio channel used for playback and visualization (default: 0).
 ```
 
-The synchronization delays are defined at the top of
-`uclr_acquisition/synchronize.py`. Every device uses the same convention:
+Run in commandline from the folder where `uclr_acquisition` saved the
+recordings:
 
-```text
-delay = device_time - camera_time
-sync_timestamp = timestamp - delay
-```
-
-For each camera recording, the script finds data files with the same recording
-name and adds or updates their `sync_timestamp` column. It processes Dobot,
-USG timestamp, IMU, and PSMove CSV files. Both `timestamp` and `Timestamp`
-column names are supported.
-
-For a matching Raspberry Pi WAV, the script:
-
-1. extracts the embedded camera audio with FFmpeg,
-2. finds the synchronization chirp in both audio streams,
-3. calculates the difference between the chirp positions,
-4. removes the corresponding beginning of the WAV when the MEMS chirp occurs
-   later than the camera chirp.
-
-Camera WebM files and USG MP4 files are not trimmed. If no camera audio stream
-or synchronization chirp is found, the WAV remains unchanged.
-
-The script modifies matching CSV and WAV files in place. Keep a copy of the
-original recordings when the unmodified data is required. FFmpeg and
-`ffprobe` must be available on `PATH`.
-
-## Video annotation
-
-The package installs a separate annotation command. Run it from the acquisition
-directory containing `videos/`, `setup.json`, and the configured `local_dir`:
-
-```powershell
-uclr_annotate
-```
-
-The command annotates `cam1` recordings by default. To annotate the second
-camera instead, run:
-
-```powershell
-uclr_annotate --camera cam2
-```
-
-Select audio channel `0` or `1` with:
-
-```powershell
+```commandline
 uclr_annotate --camera cam2 --audio-channel 1
 ```
 
-Video paths are read automatically from `videos/`. Matching WAV files are read
-from `local_dir` in `setup.json`, falling back to `micro_data/` when no setting
-is available. Camera suffixes (`_cam1` and `_cam2`) are removed when matching a
-video to its WAV file. Annotation JSON files are saved in `annotations/`.
+Videos are read from `videos/`. The matching WAV file is read from `local_dir`
+in `setup.json` in the same folder, or from `micro_data/` when the setting is
+missing. Annotations are saved in `annotations/<recording name>.json`.
 
-The annotation window supports events 1-8, Space to pause or resume, A/D to
-move between frames while paused, N/P to move between recordings, C to clear
-new events, R to reset zoom, and Escape to exit. Waveform and spectrogram views
-can be selected from the control bar. The selected audio channel is used for
-visualization and playback. The tool does not read labelled-position files and
-does not display a velocity plot.
+| Key | Action |
+|---|---|
+| 1-8 | Mark event at the current frame. Events must be marked in order, and marking an event removes the later ones. |
+| Ctrl + 1-8 | Restore the event saved earlier for the recording. |
+| Space | Pause or resume. |
+| A / D | Previous or next frame while paused. |
+| N / P | Next or previous recording. |
+| C | Clear new events. |
+| R | Reset zoom. |
+| Esc | Exit. |
 
-## Raspberry Pi MEMS requirements
+Waveform and spectrogram views can be selected from the control bar.
 
-The application uploads the bundled ALSA configuration to the Raspberry Pi
-when the MEMS checkbox is enabled. The default recording device is
-`dmic_sv_shared`.
-
-The Raspberry Pi must provide:
-
-- SSH connectivity from the acquisition computer,
-- the `arecord` command,
-- an I2S MEMS microphone exposed as `dmic_sv_shared`,
-- write access to the configured `remote_dir`.

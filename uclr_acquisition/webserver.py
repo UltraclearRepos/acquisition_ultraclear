@@ -7,9 +7,12 @@ import subprocess
 import cv2
 from uclr_acquisition.config import config
 from uclr_acquisition.experiment import (
-    safe_run_automation,
+    safe_run_points_automation,
     safe_run_arc_automation,
+    safe_run_updown_automation,
+    safe_run_grid_automation,
 )
+from uclr_acquisition.grid_config import load_grid_config
 from .record import start_recording, stop_recording, delete_last_recording, notify_camera_upload_complete
 from .utils import build_filename, get_local_ip_address
 import threading
@@ -79,7 +82,8 @@ def upload_video():
                 f.write(f"cam1_cam2,{start_timestamp}\n")
             print(f"Camera start timestamp saved to {video_ts_path}")
 
-    socketio.start_background_task(remux_webm_in_background, file_path)
+    video_codec = request.form.get("codec", "vp9")
+    socketio.start_background_task(remux_webm_in_background, file_path, video_codec)
 
     return jsonify({"status": "ok", "filename": filename})
 
@@ -87,6 +91,15 @@ def upload_video():
 @app.route("/", methods=['GET'])
 def frontpage():
     return send_from_directory(STATIC_DIR, "index.html")
+
+@app.route("/config", methods=['GET'])
+def api_config():
+    """Return the filename options defined in setup.json."""
+    return jsonify({
+        "materials": config.get("materials", []),
+        "needleTypes": config.get("needleTypes", []),
+        "sensorVersions": config.get("sensorVersions", []),
+    })
 
 @app.route('/usg_feed')
 def usg_feed():
@@ -274,10 +287,11 @@ def device_status():
     }
     return jsonify(status)
 
-@app.route("/run", methods=["POST"])
-def run():
+@app.route("/run-points", methods=["POST"])
+def run_points():
+    """Start the coordinate path acquisition mode."""
     global automation_thread, stop_event
-    print("Received run/POST request")
+    print("Received run-points/POST request")
     params = request.get_json(force=True)
     print(f'With params: {params}')
 
@@ -287,11 +301,14 @@ def run():
     
     stop_event.clear()
     automation_thread = threading.Thread(
-        target=safe_run_automation,
+        target=safe_run_points_automation,
         kwargs=dict(
             points = params["points"],
             speed = int(params["speed"]),
             description = params.get("description", ""),
+            material = params.get("material", ""),
+            needle_type = params.get("needleType", ""),
+            microphone_type = params.get("microphoneType", ""),
             num_iterations = int(params["iterations"]),
             num_repetitions = int(params.get("repetitions", 1)),
             initial_sleep_time = int(params.get("initialSleepTime", 3)),
@@ -304,7 +321,7 @@ def run():
 
     automation_thread.start()
 
-    return jsonify({"status": "started"})
+    return jsonify({"status": "started", "mode": "points"})
 
 
 @app.route("/run-arc", methods=["POST"])
@@ -331,6 +348,9 @@ def run_arc():
             radius=params["radius"],
             speed=params["speed"],
             description=params.get("description", ""),
+            material=params.get("material", ""),
+            needle_type=params.get("needleType", ""),
+            microphone_type=params.get("microphoneType", ""),
             num_iterations=params["iterations"],
             num_repetitions=params.get("repetitions", 1),
             initial_sleep_time=params.get("initialSleepTime", 3),
@@ -344,6 +364,90 @@ def run_arc():
 
     return jsonify({"status": "started", "mode": "arc180"})
 
+
+@app.route("/run-updown", methods=["POST"])
+def run_updown():
+    """Start the up/down acquisition mode."""
+    global automation_thread, stop_event
+    print("Received run-updown/POST request")
+    params = request.get_json(force=True)
+    print(f'With params: {params}')
+
+    required = (
+        "speed", "iterations", "initX", "finishX", "y", "upZ", "downZ",
+        "r", "motionType", "interval"
+    )
+    if not all(param in params for param in required):
+        return jsonify({"error": "Missing up/down parameters"}), 400
+
+    stop_event.clear()
+    automation_thread = threading.Thread(
+        target=safe_run_updown_automation,
+        kwargs=dict(
+            init_x=params["initX"],
+            finish_x=params["finishX"],
+            y=params["y"],
+            up_z=params["upZ"],
+            down_z=params["downZ"],
+            r=params["r"],
+            motion_type=params["motionType"],
+            interval=params["interval"],
+            speed=params["speed"],
+            description=params.get("description", ""),
+            material=params.get("material", ""),
+            needle_type=params.get("needleType", ""),
+            microphone_type=params.get("microphoneType", ""),
+            num_iterations=params["iterations"],
+            initial_sleep_time=params.get("initialSleepTime", 3),
+            sleep_time=params.get("sleepTime", 3),
+            stop_event=stop_event,
+            socketio_instance=socketio,
+        ),
+        daemon=True,
+    )
+    automation_thread.start()
+
+    return jsonify({"status": "started", "mode": "updown"})
+
+
+@app.route("/run-grid", methods=["POST"])
+def run_grid():
+    """Start the grid acquisition mode using grid_config from setup.json."""
+    global automation_thread, stop_event
+    print("Received run-grid/POST request")
+    params = request.get_json(force=True)
+    print(f'With params: {params}')
+
+    if "speed" not in params:
+        return jsonify({"error": "Missing grid parameters"}), 400
+
+    try:
+        grid_config = load_grid_config(config["grid_config"])
+    except KeyError:
+        return jsonify({"error": "Missing 'grid_config' path in setup.json"}), 400
+    except Exception as e:
+        return jsonify({"error": f"Invalid grid config: {e}"}), 400
+
+    stop_event.clear()
+    automation_thread = threading.Thread(
+        target=safe_run_grid_automation,
+        kwargs=dict(
+            grid_config=grid_config,
+            speed=params["speed"],
+            description=params.get("description", ""),
+            material=params.get("material", ""),
+            needle_type=params.get("needleType", ""),
+            microphone_type=params.get("microphoneType", ""),
+            sleep_time=params.get("sleepTime", 3),
+            stop_event=stop_event,
+            socketio_instance=socketio,
+        ),
+        daemon=True,
+    )
+    automation_thread.start()
+
+    return jsonify({"status": "started", "mode": "grid"})
+
 @app.route("/stop", methods=['POST'])
 def stop():
     print("Received stop/POST request")
@@ -356,8 +460,11 @@ def start_manual():
     params = request.get_json(force=True)
     description = params.get("description")
     username = params.get("username")
-    
-    prefix = build_filename(username, description)
+    material = params.get("material")
+    needle_type = params.get("needleType")
+    microphone_type = params.get("microphoneType")
+
+    prefix = build_filename(username, description, material, needle_type, microphone_type)
     
     success, msg = start_recording(prefix, socketio)
     if success:
@@ -382,7 +489,7 @@ def post_delete_last_recording():
         return jsonify({"status": "not found", "message": "No recordings to delete."})
     return jsonify({"status": "ok", "message": message})
 
-def remux_webm(file_path):
+def remux_webm(file_path, video_codec="vp9"):
     source_path = Path(file_path)
     temporary_path = source_path.with_name(f"{source_path.stem}_remuxing{source_path.suffix}")
 
@@ -393,8 +500,14 @@ def remux_webm(file_path):
         "-i", str(source_path),
         "-map", "0",
         "-c", "copy",
-        str(temporary_path),
     ]
+
+    # FFmpeg WebM muxer accepts only VP8/VP9/AV1 video, so H.264 recordings
+    # are written with the Matroska muxer while keeping the .webm extension.
+    if video_codec == "h264":
+        command += ["-f", "matroska"]
+
+    command.append(str(temporary_path))
 
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
@@ -415,8 +528,8 @@ def remux_webm(file_path):
         temporary_path.unlink(missing_ok=True)
         print(f"Unexpected error during remuxing {source_path}: {exc}")
 
-def remux_webm_in_background(file_path):
-    tpool.execute(remux_webm, file_path)
+def remux_webm_in_background(file_path, video_codec="vp9"):
+    tpool.execute(remux_webm, file_path, video_codec)
 
 
 def parse_args():

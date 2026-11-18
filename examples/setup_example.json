@@ -1,0 +1,33 @@
+{
+    "usg_dll_path": "D:\\ncn\\ultraclear\\externalSoftware\\Real-time Imaging for the Research\\usgfw2wrapper_C++_sources\\x64\\Release\\usgfw2wrapper.dll",
+    "psmove_dll_path": "D:\\ncn\\ultraclear\\externalSoftware\\PSMove\\PSMoveService\\PSMoveClient_CAPI.dll",
+    "imu_port": "COM11",
+    "raspberry_pi": {
+        "host": "ip_address",
+        "port": 22,
+        "username": "pi",
+        "password": ""
+    },
+    "local_dir": "micro_data",
+    "remote_dir": "uclr_acquisition",
+    "materials": [
+        "Slime",
+        "Silicone",
+        "PU",
+        "Plato (play dough)",
+        "Plastic",
+        "Ikea (plastic bag)",
+        "African (silk)",
+        "Test"
+    ],
+    "needleTypes": [
+        "Type1",
+        "Type2",
+        "Type3"
+    ],
+    "sensorVersions": [
+        "TypeA",
+        "TypeB",
+        "TypeC"
+    ]
+}

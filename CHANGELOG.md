@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-11-18
+### Added
+- Up/Down dobot mode
+- Grid (from file) dobot mode
+- Video recording profile selection: better quality (VP9) or better performance (H.264)
+- Material, needle type and sensor version selects with options from setup.json, added to recording file names
+
+### Changed
+- Remux H.264 camera recordings with the Matroska muxer
+- Rename Dobot movement type to automation mode
+- Rename coordinate path automation endpoint from `/run` to `/run-points`
+- Synchronization shifts the camera audio stream to start with the video stream
+- Synchronization cuts the end of the MEMS WAV to the camera video duration
+
 ## [0.8.0] - 2026-09-30
 ### Added
 - Camera upload completion signaling between the browser and backend
