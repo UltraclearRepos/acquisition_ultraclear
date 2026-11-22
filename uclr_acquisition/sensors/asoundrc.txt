@@ -38,3 +38,15 @@ pcm.dmic_sv_shared {
 		format S32_LE
 	}
 }
+
+#Mono recording of the left channel only. The hardware still captures
+#2 channels, the right channel is dropped. Use with arecord -c 1.
+
+pcm.dmic_sv_shared_1channel {
+	type route
+	slave {
+		pcm "dmic_sv_shared"
+		channels 2
+	}
+	ttable.0.0 1
+}

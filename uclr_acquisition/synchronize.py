@@ -284,6 +284,11 @@ def find_delay_by_sync(
     video_channel=0,
 ):
     audio_fs, audio_signal = read_wave(audio_file)
+    if not 0 <= audio_channel < audio_signal.shape[0]:
+        raise ValueError(
+            f"{Path(audio_file).name} has {audio_signal.shape[0]} channel(s), "
+            f"audio channel {audio_channel} is not available"
+        )
     audio_signal = audio_signal[audio_channel, :]
     sync_signal = generate_chirp_signal(sample_rate=audio_fs)
     audio_shift = argmax_correlation(

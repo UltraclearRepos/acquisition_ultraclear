@@ -3,6 +3,7 @@ class RuntimeConfig:
         'usg_enabled': False,
         'active_trackers': [],
         'mems_enabled': False,
+        'mems_channels': 2,
     }
 
     def __init__(self):

@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-11-23
+### Added
+- MEMS recorded channels selection: 2 channels (stereo) or 1 channel (left only)
+
+### Changed
+- `uclr_sync` and `uclr_review_annotations` report a clear message when the selected audio channel is not in the WAV file
+
 ## [1.1.0] - 2026-11-18
 ### Added
 - `uclr_annotate_positions` command for ArUco needle position tracking and distance annotations

@@ -35,6 +35,9 @@ def build_spectrogram(audio_path, channel, width):
     )
 
     sample_rate, audio = read_wave(audio_path)
+    if not 0 <= channel < audio.shape[0]:
+        print(f"{audio_path.name} has {audio.shape[0]} channel(s), audio channel {channel} is not available.")
+        return None
     samples = audio[channel].astype(np.float32)
     duration = len(samples) / sample_rate
 
@@ -202,10 +205,13 @@ def main():
         )
         audio_path = audio_folder / f"{video_path.stem}.wav"
         sample_rate = None
+        spectrogram = None
         if audio_path.is_file():
-            chart, duration, sample_rate = build_spectrogram(
+            spectrogram = build_spectrogram(
                 audio_path, args.audio_channel, frame.shape[1]
             )
+        if spectrogram is not None:
+            chart, duration, sample_rate = spectrogram
             time_source = "video time" if audio_time is None else "audio time"
             marker_label = f" | WAV marker: {marker_time:.3f} s ({time_source})"
             if not 0 <= marker_time <= duration:
@@ -230,6 +236,8 @@ def main():
                     x = int(time / duration * (chart_width - 1))
                     cv2.line(chart, (x, 0), (x, chart_height - 1), color, thickness)
             frame = cv2.vconcat([frame, chart])
+        elif audio_path.is_file():
+            marker_label = f" | WAV channel {args.audio_channel} unavailable"
         else:
             marker_label = " | WAV unavailable"
         position_label = "Needle position unavailable"
