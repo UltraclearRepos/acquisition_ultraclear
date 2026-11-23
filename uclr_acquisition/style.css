@@ -139,6 +139,16 @@ body {
     color: #176776;
 }
 
+.device-option-row label {
+    margin-left: 0;
+}
+
+.device-option-row select {
+    width: auto;
+    flex: 0 0 auto;
+    margin-left: 10px;
+}
+
 .device-status {
     width: 10px;
     height: 10px;

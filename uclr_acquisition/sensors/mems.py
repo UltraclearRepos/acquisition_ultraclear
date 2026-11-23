@@ -4,13 +4,19 @@ from pathlib import Path, PurePosixPath
 
 import paramiko
 
+from ..config import AUDIO_RAW_DIR
+
 
 class MEMSMicrophone:
     """Raspberry Pi MEMS sensor and remote WAV recorder controlled over SSH."""
 
-    DEFAULT_DEVICE = "dmic_sv_shared"
+    # ALSA device from asoundrc.txt for each number of recorded channels.
+    # One channel records only the left microphone.
+    CHANNEL_DEVICES = {
+        1: "dmic_sv_shared_1channel",
+        2: "dmic_sv_shared",
+    }
     DEFAULT_SAMPLE_RATE = 48000
-    DEFAULT_CHANNELS = 2
     DEFAULT_FORMAT = "S32_LE"
 
     def __init__(
@@ -20,20 +26,15 @@ class MEMSMicrophone:
             username,
             password,
             remote_dir,
-            local_dir,
-            device=DEFAULT_DEVICE,
             sample_rate=DEFAULT_SAMPLE_RATE,
-            channels=DEFAULT_CHANNELS,
             sample_format=DEFAULT_FORMAT):
         self.hostname = hostname
         self.port = int(port)
         self.username = username
         self.password = password
         self.remote_dir = PurePosixPath(remote_dir)
-        self.local_dir = Path(local_dir)
-        self.device = device
+        self.local_dir = Path(AUDIO_RAW_DIR)
         self.sample_rate = int(sample_rate)
-        self.channels = int(channels)
         self.sample_format = sample_format
 
         self.ssh = None
@@ -101,7 +102,7 @@ class MEMSMicrophone:
             raise RuntimeError(error or output or f"Remote command failed: {command}")
         return output
 
-    def start_recording(self, filename):
+    def start_recording(self, filename, channels):
         if not self.is_connected:
             raise RuntimeError("Raspberry Pi microphone is not connected.")
         if self.is_recording:
@@ -112,14 +113,15 @@ class MEMSMicrophone:
 
         remote_parent = shlex.quote(str(self.remote_path.parent))
         remote_path = shlex.quote(str(self.remote_path))
-        device = shlex.quote(self.device)
+        device = shlex.quote(self.CHANNEL_DEVICES[channels])
         sample_format = shlex.quote(self.sample_format)
+        vumeter = "mono" if channels == 1 else "stereo"
         self._exec(f"mkdir -p {remote_parent}")
 
         command = (
             f"nohup arecord -D {device} "
-            f"-r {self.sample_rate} -c {self.channels} "
-            f"-f {sample_format} -t wav -V stereo "
+            f"-r {self.sample_rate} -c {channels} "
+            f"-f {sample_format} -t wav -V {vumeter} "
             f"{remote_path} >/tmp/uclr_mems_arecord.log 2>&1 "
             f"</dev/null & echo $!"
         )
@@ -134,7 +136,7 @@ class MEMSMicrophone:
         time.sleep(0.2)
         self._exec(f"kill -0 {self.remote_pid}")
         self.is_recording = True
-        print(f"MEMS recording started: {self.remote_path}")
+        print(f"MEMS recording started ({channels} channel(s)): {self.remote_path}")
 
     def stop_capture(self):
         """Stop arecord and wait until the WAV header/file is finalized."""

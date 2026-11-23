@@ -94,6 +94,7 @@ const deviceUSGStatus = document.getElementById("deviceUSGStatus");
 const trackerIMUStatus = document.getElementById("trackerIMUStatus");
 const trackerPSMoveStatus = document.getElementById("trackerPSMoveStatus");
 const deviceMEMSStatus = document.getElementById("deviceMEMSStatus");
+const memsChannelsEl = document.getElementById("memsChannels");
 const usgStream = document.getElementById("usgStream");
 
 const TARGET_CAMERA_FPS = 15;
@@ -644,6 +645,7 @@ function toggleButtons(automation_running) {
 	stopRecordingBt.disabled = !automation_running;
 	toggleUsgBtn.disabled = automation_running;
 	deviceMEMS.disabled = automation_running;
+	memsChannelsEl.disabled = automation_running;
 	audioInputSelect.disabled = automation_running;
 	videoProfileEl.disabled = automation_running;
 }
@@ -1131,6 +1133,34 @@ function handleMemsToggle() {
 		});
 }
 
+let memsChannels = memsChannelsEl.value;
+
+function handleMemsChannelsChange() {
+	const channels = parseInt(memsChannelsEl.value, 10);
+	memsChannelsEl.disabled = true;
+
+	fetch("/mems-channels", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ channels: channels })
+	})
+		.then(async response => {
+			const data = await response.json();
+			if (!response.ok || data.status !== "ok") {
+				throw new Error(data.message || "Could not change MEMS channels");
+			}
+			memsChannels = memsChannelsEl.value;
+		})
+		.catch(error => {
+			console.error("Error changing MEMS channels:", error);
+			memsChannelsEl.value = memsChannels;
+			alert("Error changing MEMS channels: " + error.message);
+		})
+		.finally(() => {
+			memsChannelsEl.disabled = false;
+		});
+}
+
 (async function init() {
 
 	await loadFilenameOptions();
@@ -1164,6 +1194,10 @@ function handleMemsToggle() {
 			if (data.mems) {
 				deviceMEMS.checked = data.mems.enabled;
 				updateDeviceStatus(deviceMEMSStatus, data.mems.enabled ? (data.mems.initialized ? 'on' : 'error') : 'off');
+				if (data.mems.channels) {
+					memsChannelsEl.value = String(data.mems.channels);
+					memsChannels = memsChannelsEl.value;
+				}
 			}
 		})
 		.catch(err => console.error("Error fetching device status:", err));
@@ -1201,6 +1235,7 @@ deviceUSG.addEventListener("change", () => handleUsgToggle(deviceUSG, deviceUSGS
 trackerIMU.addEventListener("change", () => handleTrackerToggle("imu", trackerIMU, trackerIMUStatus));
 trackerPSMove.addEventListener("change", () => handleTrackerToggle("psmove", trackerPSMove, trackerPSMoveStatus));
 deviceMEMS.addEventListener("change", handleMemsToggle);
+memsChannelsEl.addEventListener("change", handleMemsChannelsChange);
 
 
 toggleUsgBtn.addEventListener("click", () => {

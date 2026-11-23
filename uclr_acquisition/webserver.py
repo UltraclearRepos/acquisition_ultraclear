@@ -5,7 +5,7 @@ from eventlet import tpool
 from flask import Flask, request, jsonify, send_from_directory, Response
 import subprocess
 import cv2
-from uclr_acquisition.config import config, AUDIO_RAW_DIR, CAMERA_VIDEO_DIRS
+from uclr_acquisition.config import config, CAMERA_VIDEO_DIRS
 from uclr_acquisition.experiment import (
     safe_run_points_automation,
     safe_run_arc_automation,
@@ -234,7 +234,6 @@ def device_mems_toggle():
                     username=rpi_config["username"],
                     password=rpi_config["password"],
                     remote_dir=config["remote_dir"],
-                    local_dir=AUDIO_RAW_DIR,
                 )
                 sensors.mems_microphone.connect()
             except Exception as exc:
@@ -264,6 +263,24 @@ def device_mems_toggle():
     runtime_config.set_value('mems_enabled', False)
     return jsonify({"status": "ok", "state": "off"})
 
+@app.route('/mems-channels', methods=['POST'])
+def mems_channels():
+    """Select 1 (left only) or 2 recorded MEMS channels."""
+    print("Received mems-channels/POST request")
+    channels = (request.get_json(silent=True) or {}).get("channels")
+
+    if channels not in MEMSMicrophone.CHANNEL_DEVICES:
+        return jsonify({"status": "error", "message": f"Unsupported number of channels: {channels}"}), 400
+
+    if sensors.mems_microphone is not None and sensors.mems_microphone.is_recording:
+        return jsonify({
+            "status": "error",
+            "message": "Cannot change MEMS channels while recording.",
+        }), 409
+
+    runtime_config.set_value('mems_channels', channels)
+    return jsonify({"status": "ok", "channels": channels})
+
 @app.route('/device-status', methods=['GET'])
 def device_status():
     status = {
@@ -283,6 +300,7 @@ def device_status():
             "enabled": runtime_config['mems_enabled'],
             "initialized": bool(sensors.mems_microphone and sensors.mems_microphone.is_connected
             ),
+            "channels": runtime_config['mems_channels'],
         }
     }
     return jsonify(status)

@@ -139,6 +139,18 @@ of unused devices can be omitted:
 
 An empty Raspberry Pi password allows key-based or SSH-agent authentication.
 MEMS WAV files are always downloaded to `audio_raw/` in the working directory.
+
+`MEMS recorded channels` in the Devices section selects the WAV channels:
+
+- `2 (stereo)` records both I2S channels with the `dmic_sv_shared` ALSA device,
+- `1 (left only)` records only the left channel with the
+  `dmic_sv_shared_1channel` ALSA device.
+
+Both devices are defined in `uclr_acquisition/sensors/asoundrc.txt`, which is
+uploaded to `/home/pi/.asoundrc` when the MEMS checkbox is enabled. A mono WAV
+has only channel 0, so use `--audio-channel 0` with `uclr_sync`,
+`uclr_annotate`, and `uclr_review_annotations`.
+
 The selected material, needle type, and sensor version are added to recording
 file names. A missing list leaves its select empty.
 

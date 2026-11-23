@@ -55,7 +55,8 @@ def start_recording(output_filename_prefix, socketio_instance):
     if sensors.mems_microphone:
         try:
             sensors.mems_microphone.start_recording(
-                f"{output_filename_prefix}.wav"
+                f"{output_filename_prefix}.wav",
+                runtime_config['mems_channels'],
             )
             mems_started = True
         except Exception as exc:
